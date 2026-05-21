@@ -37468,8 +37468,10 @@
 							clickContainer.call(menuContainer);
 						}
 					}
-					menux=createMenu(['开始','选项','武将','卡牌','扩展','其它'],{
-						position:menuContainer,bar:40
+					// menux=createMenu(['开始','选项','武将','卡牌','扩展','其它'],{
+					menux=createMenu(['选项','其它'],{
+                        // position:menuContainer,bar:40
+						position:menuContainer,bar:150
 					});
 				}
 				else{
@@ -37510,7 +37512,7 @@
 				var menuxpages=menux.pages.slice(0);
 
 				var copyObj=get.copy;
-
+/*
 				(function(){
 					var start=menuxpages.shift();
 					var rightPane=start.lastChild;
@@ -37985,7 +37987,7 @@
 						},{passive:true});
 					}
 				}());
-
+*/
 				(function(){
 					if(connectMenu) return;
 					var start=menuxpages.shift();
@@ -39118,7 +39120,7 @@
 					}
 					rightPane.appendChild(active.link);
 				}());
-
+/*
 				(function(){
 					var start=menuxpages.shift();
 					var rightPane=start.lastChild;
@@ -42664,7 +42666,7 @@
 					rightPane.appendChild(active.link);
 					updateNodes();
 				}());
-
+*/
 				(function(){
 					if(connectMenu) return;
 					var start=menuxpages.shift();
@@ -42780,8 +42782,8 @@
 							}
 							return str;
 						}
-						li0.innerHTML='特别鸣谢：无名杀开发团队！<br/><p style="margin-top:8px;white-space:nowrap"></p>';
-						li1.innerHTML='村规版本：'+lib.version+'<p style="margin-top:8px;white-space:nowrap"></p>';
+						li0.innerHTML='特别鸣谢：无名杀开发团队<br/><p style="margin-top:8px;white-space:nowrap"></p>';
+						li1.innerHTML='版本：'+lib.version+'<p style="margin-top:8px;white-space:nowrap"></p>';
 						li2.innerHTML='素材版本：'+(lib.config.asset_version||'无')+'<p style="margin-top:8px"></p>';
 						li3.innerHTML='更新地址：<span>'+trimurl(lib.config.updateURL||lib.updateURL)+'</span><p style="margin-top:8px"></p>';
 						li3.style.whiteSpace='nowrap';
@@ -43211,7 +43213,7 @@
 							updatepx.style.whiteSpace='nowrap';
 							updatepx.style.marginTop='8px';
 							var buttonx=ui.create.node('button','访问项目主页',function(){
-								window.open('https://github.com/libccy/noname');
+								window.open('https://github.com/wemitbbs/noname-tractor');
 							});
 							updatepx.appendChild(buttonx);
 							ui.updateUpdate=function(){

@@ -75,6 +75,24 @@ var TractorPlayer = /** @class */ (function () {
         }
     };
     TractorPlayer.prototype.NotifyGameState = function (gameState, notifyType) {
+        // 核心修复：立即进行观察者身份检测与角色重置逻辑
+        var foundAsObserver = false;
+        for (var i = 0; i < gameState.Players.length; i++) {
+            var p = gameState.Players[i];
+            if (p != null && p.Observers.includes(this.MyOwnId)) {
+                foundAsObserver = true;
+                if (this.PlayerId != p.PlayerId) {
+                    this.isObserver = true;
+                    this.PlayerId = p.PlayerId; // 视角锁定为被观察者
+                }
+                break;
+            }
+        }
+        if (!foundAsObserver && this.isObserver) {
+            this.isObserver = false;
+            this.PlayerId = this.MyOwnId; // 恢复自己的视角
+        }
+
         //bug修复：如果所有人都开始了，然后来自服务器的新消息开始人数既不是0又不是4（由于网络延迟导致有一人未开始的来自服务器的消息滞后到达），那么不处理这条消息
         var isCurrentAllReady = CommonMethods.GetReadyCount(this.CurrentGameState.Players) == 4;
         var newReadyCount = CommonMethods.GetReadyCount(gameState.Players);
@@ -142,8 +160,11 @@ var TractorPlayer = /** @class */ (function () {
                 continue;
             if (p.PlayerId == this.PlayerId) {
                 this.mainForm.NewPlayerReadyToStart(p.IsReadyToStart);
-                this.mainForm.PlayerToggleIsRobot(p.IsRobot);
-                this.mainForm.PlayerToggleIsQiangliang(p.IsQiangliang);
+                if (!this.isObserver) {
+                    this.mainForm.PlayerToggleIsRobot(p.IsRobot);
+                    this.mainForm.PlayerToggleIsQiangliang(p.IsQiangliang);
+                }
+                this.mainForm.UpdateRobotButtonStatus();
                 if (anyBecomesReady &&
                     (this.CurrentHandState.CurrentHandStep <= SuitEnums.HandStep.BeforeDistributingCards || this.CurrentHandState.CurrentHandStep >= SuitEnums.HandStep.SpecialEnding)) {
                     if (CommonMethods.AllReady(this.CurrentGameState.Players))
@@ -170,6 +191,38 @@ var TractorPlayer = /** @class */ (function () {
         }
         // 重画头像这样新任房主可将玩家请出房间
         this.mainForm.NewPlayerJoined(!this.IsTryingReenter, true);
+
+        // 动态注入房主/管理员指令
+        var selectPresetMsgs = this.mainForm.gameScene.ui.selectPresetMsgs;
+        if (selectPresetMsgs) {
+            // 1. 彻底清理现有的所有特殊命令 (★开头)
+            for (var i = selectPresetMsgs.options.length - 1; i >= 0; i--) {
+                if (selectPresetMsgs.options[i].text.indexOf("★") === 0) {
+                    selectPresetMsgs.remove(i);
+                }
+            }
+
+            // 2. 判定身份并按需注入
+            var isOwner = this.MyOwnId === roomSetting.RoomOwner;
+            var isInRoom = this.mainForm.gameScene.isInGameRoom();
+
+            // 房主且在房间内，显示加 Bot
+            if (isOwner && isInRoom) {
+                var botOption = document.createElement("option");
+                botOption.value = "命令：一键填满bot";
+                botOption.text = "★ 命令：一键填满bot";
+                selectPresetMsgs.appendChild(botOption);
+            }
+
+            // 是管理员，始终显示刷新设置 (在大厅、在房间都有)
+            if (this.isAdmin) {
+                var adminOption = document.createElement("option");
+                adminOption.value = "命令：刷新游戏设置";
+                adminOption.text = "★ 管理员：刷新游戏设置";
+                selectPresetMsgs.appendChild(adminOption);
+            }
+        }
+
         if (showMessage) {
             var msgs = [];
             if (roomSetting.DisplaySignalCardInfo) {
@@ -280,6 +333,7 @@ var TractorPlayer = /** @class */ (function () {
             this.CurrentPoker.Rank = this.CurrentHandState.Rank;
             this.mainForm.StarterFailedForTrump();
         }
+        this.mainForm.UpdateRobotButtonStatus();
     };
     TractorPlayer.prototype.VerifyHandCards = function () {
         var expectedCurrentPoker = this.CurrentHandState.PlayerHoldingCards[this.PlayerId];
@@ -417,7 +471,7 @@ var TractorPlayer = /** @class */ (function () {
             this.mainForm.PlayerOnGetCard(cardNumber);
         }
         if (this.CurrentPoker.Count() == TractorRules.GetCardNumberofEachPlayer(this.CurrentGameState.Players.length) + 8) {
-            this.mainForm.drawingFormHelper.ResortMyHandCards();
+            this.mainForm.drawingFormHelper.ResortMyHandCards(true);
         }
     };
     TractorPlayer.prototype.NotifyMessage = function (msgs) {
@@ -438,7 +492,36 @@ var TractorPlayer = /** @class */ (function () {
         }
         for (var i = 0; i < msgs.length; i++) {
             var m = msgs[i];
-            if (m.includes("获胜！")) {
+            if (m === "SET_MY_ID") {
+                var confirmedId = msgs[i + 1];
+                var forumUrl = msgs[i + 2] || "/";
+                var isAdmin = msgs[i + 3] === true; // 解析管理员标记
+                this.MyOwnId = confirmedId;
+                this.PlayerId = confirmedId;
+                this.mainForm.gameScene.playerName = confirmedId;
+                this.forumHomeUrl = forumUrl;
+                this.isAdmin = isAdmin; // 存入本地变量
+                
+                // 核心优化：身份确认后，才开始渲染大厅界面和系统按钮
+                this.mainForm.drawFrameMain();
+                this.mainForm.drawFrameChat();
+                this.mainForm.LoadUIUponConnect();
+                return;
+            }
+            else if (m === "REDIRECT_TO_LOGIN") {
+                var loginUrl = msgs[i + 1] || "/";
+                var currentUrl = window.location.href;
+                // 自动跳转回当前游戏主页
+                var finalUrl = loginUrl + (loginUrl.indexOf('?') === -1 ? '?' : '&') + "redirect=" + encodeURIComponent(currentUrl);
+                window.location.href = finalUrl;
+                return;
+            }
+            // 核心修复：统一处理所有闲置踢人消息
+            else if (m.includes("闲置超时")) {
+                this.mainForm.showOfflineScreen(m);
+                return;
+            }
+            else if (m.includes("获胜！")) {
                 this.mainForm.gameScene.playAudio(CommonMethods.audioWin);
             }
             else if (m.includes(CommonMethods.reenterRoomSignal)) {
@@ -495,6 +578,20 @@ var TractorPlayer = /** @class */ (function () {
             this.mainForm.gameScene.game.saveConfig("noDongtu", this.mainForm.gameScene.noDongtu);
         }
         this.mainForm.DaojuInfo = daojuInfo;
+        // 核心修复：只更新价格，不覆盖对象，从而保住前端的中文描述
+        if (daojuInfo.skinPrices && this.mainForm.gameScene.ui.fullSkinInfoResources) {
+            var localSkins = this.mainForm.gameScene.ui.fullSkinInfoResources;
+            for (var skinName in daojuInfo.skinPrices) {
+                if (localSkins[skinName]) {
+                    localSkins[skinName].skinCost = daojuInfo.skinPrices[skinName];
+                }
+            }
+        }
+        // 刷新余额显示
+        var lblShengbi = document.getElementById("lblShengbi");
+        if (lblShengbi && daojuInfo.daojuInfoByPlayer[this.MyOwnId]) {
+            lblShengbi.innerHTML = daojuInfo.daojuInfoByPlayer[this.MyOwnId].Shengbi;
+        }
         this.mainForm.gameScene.noChat = this.mainForm.isChatBanned(this.MyOwnId);
         if (updateQiandao)
             this.mainForm.UpdateQiandaoStatus();

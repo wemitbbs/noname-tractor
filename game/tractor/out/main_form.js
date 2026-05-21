@@ -175,19 +175,25 @@ var MainForm = /** @class */ (function () {
         this.IsQiangliang = isQiangliang;
     };
     MainForm.prototype.PlayersTeamMade = function () {
-        //set player position
+        // 核心修复：重写位置映射逻辑，使其对空位（null）鲁棒
         this.PlayerPosition = {};
         this.PositionPlayer = {};
-        var nextPlayer = this.tractorPlayer.PlayerId;
-        var postion = 1;
-        this.PlayerPosition[nextPlayer] = postion;
-        this.PositionPlayer[postion] = nextPlayer;
-        nextPlayer = CommonMethods.GetNextPlayerAfterThePlayer(this.tractorPlayer.CurrentGameState.Players, nextPlayer).PlayerId;
-        while (nextPlayer != this.tractorPlayer.PlayerId) {
-            postion++;
-            this.PlayerPosition[nextPlayer] = postion;
-            this.PositionPlayer[postion] = nextPlayer;
-            nextPlayer = CommonMethods.GetNextPlayerAfterThePlayer(this.tractorPlayer.CurrentGameState.Players, nextPlayer).PlayerId;
+        var players = this.tractorPlayer.CurrentGameState.Players;
+        var myId = this.tractorPlayer.PlayerId;
+        var myIdx = CommonMethods.GetPlayerIndexByID(players, myId);
+        if (myIdx === -1) myIdx = 0;
+        for (var i = 0; i < 4; i++) {
+            var curIdx = (myIdx + i) % 4;
+            var p = players[curIdx];
+            var pos = i + 1; // 1=自己, 2=下家, 3=对家, 4=上家
+            if (p != null) {
+                this.PlayerPosition[p.PlayerId] = pos;
+                this.PositionPlayer[pos] = p.PlayerId;
+            } else {
+                var emptyId = "[空位 " + (curIdx + 1) + "]";
+                this.PlayerPosition[emptyId] = pos;
+                this.PositionPlayer[pos] = emptyId;
+            }
         }
     };
     MainForm.prototype.NewPlayerJoined = function (shouldReDrawChairOrPlayer, shouldReDrawBtnPauseOrContinueGame) {
@@ -227,16 +233,39 @@ var MainForm = /** @class */ (function () {
         // btnPauseOrContinueGame
         if (shouldReDrawBtnPauseOrContinueGame) {
             if (this.tractorPlayer.CurrentRoomSetting.RoomOwner === this.tractorPlayer.MyOwnId) {
-                var btnName_1 = this.tractorPlayer.CurrentRoomSetting.secondsToShowCards == 0 ? "继续" : "暂停";
+                var btnName_1 = this.tractorPlayer.CurrentRoomSetting.IsPaused ? "继续" : "暂停";
+                var isPlaying = (this.tractorPlayer.CurrentHandState.CurrentHandStep === SuitEnums.HandStep.Playing);
                 if (!this.gameScene.ui.btnPauseOrContinueGame) {
                     this.gameScene.ui.btnPauseOrContinueGame = this.gameScene.ui.create.system(btnName_1, function () { return _this.PauseOrContinueGame(); }, true, true);
+                    // 核心修复：新生成的按钮立即应用暗黑样式
+                    if (!isPlaying) {
+                        this.gameScene.ui.btnPauseOrContinueGame.style.opacity = "0.5";
+                        this.gameScene.ui.btnPauseOrContinueGame.style.filter = "grayscale(1)";
+                    }
                 }
                 else {
                     this.gameScene.ui.btnPauseOrContinueGame.hide();
                     setTimeout(function () {
-                        _this.gameScene.ui.btnPauseOrContinueGame.show();
-                        _this.gameScene.ui.btnPauseOrContinueGame.innerHTML = btnName_1;
+                        if (_this.gameScene.ui.btnPauseOrContinueGame) {
+                            _this.gameScene.ui.btnPauseOrContinueGame.show();
+                            _this.gameScene.ui.btnPauseOrContinueGame.innerHTML = btnName_1;
+                            // 核心修复：延迟后再次同步样式
+                            var currentStep = _this.tractorPlayer.CurrentHandState.CurrentHandStep;
+                            if (currentStep !== SuitEnums.HandStep.Playing) {
+                                _this.gameScene.ui.btnPauseOrContinueGame.classList.add('disabled');
+                                _this.gameScene.ui.btnPauseOrContinueGame.classList.remove('pointerdiv');
+                                _this.gameScene.ui.btnPauseOrContinueGame.style.opacity = "0.5";
+                                _this.gameScene.ui.btnPauseOrContinueGame.style.filter = "grayscale(1)";
+                            }
+                        }
                     }, 3000);
+                }
+                // 核心修复：初始同步
+                if (!isPlaying && this.gameScene.ui.btnPauseOrContinueGame) {
+                    this.gameScene.ui.btnPauseOrContinueGame.classList.add('disabled');
+                    this.gameScene.ui.btnPauseOrContinueGame.classList.remove('pointerdiv');
+                    this.gameScene.ui.btnPauseOrContinueGame.style.opacity = "0.5";
+                    this.gameScene.ui.btnPauseOrContinueGame.style.filter = "grayscale(1)";
                 }
             }
             else {
@@ -246,6 +275,7 @@ var MainForm = /** @class */ (function () {
                 }
             }
         }
+        this.UpdateRobotButtonStatus();
         // // small games
         // this.btnSmallGames.setVisible(!this.tractorPlayer.isObserver);
         // if (this.tractorPlayer.isObserver) {
@@ -255,11 +285,17 @@ var MainForm = /** @class */ (function () {
             this.destroyImagesChairOrPlayer();
         this.destroyPokerPlayerObGameRoom();
         var curIndex = CommonMethods.GetPlayerIndexByID(this.tractorPlayer.CurrentGameState.Players, this.tractorPlayer.PlayerId);
+        if (curIndex === -1) curIndex = 0; // 核心加固
+
         var _loop_1 = function (i) {
             var p = this_1.tractorPlayer.CurrentGameState.Players[curIndex];
-            var isEmptySeat = !p;
+            // 核心修复：如果 ID 包含 [空位，说明是没人但有观察者的席位，也画成椅子
+            var isEmptySeat = !p || (p.PlayerId && p.PlayerId.indexOf("[空位") !== -1);
             if (isEmptySeat) {
                 if (shouldReDrawChairOrPlayer) {
+                    if (i === 0) {
+                        this_1.gameScene.ui.gameMe.hide(); // 核心修复：如果是空位，隐藏自己的主视角头像框
+                    }
                     pokerChair = this_1.gameScene.ui.create.div('.pokerChair', this_1.gameScene.ui.frameGameRoom);
                     pokerChair.setBackgroundImage('image/tractor/btn/poker_chair.png');
                     if (i === 1)
@@ -278,9 +314,14 @@ var MainForm = /** @class */ (function () {
                     pokerChair.setAttribute('data-position', i);
                     // click
                     pokerChair.addEventListener("click", function (e) {
-                        var pos = i + 1;
-                        var playerIndex = CommonMethods.GetPlayerIndexByPos(_this.tractorPlayer.CurrentGameState.Players, _this.tractorPlayer.PlayerId, pos);
-                        _this.ExitRoomAndEnter(playerIndex);
+                        // 核心加固：点击椅子时，如果是观察者，传绝对索引 i，如果是玩家传 playerIndex
+                        if (_this.tractorPlayer.isObserver) {
+                            _this.ExitRoomAndEnter(i);
+                        } else {
+                            var pos = i + 1;
+                            var playerIndex = CommonMethods.GetPlayerIndexByPos(_this.tractorPlayer.CurrentGameState.Players, _this.tractorPlayer.PlayerId, pos);
+                            _this.ExitRoomAndEnter(playerIndex);
+                        }
                     });
                     // mouseover
                     pokerChair.addEventListener("mouseover", function (e) {
@@ -300,6 +341,10 @@ var MainForm = /** @class */ (function () {
                     });
                     this_1.gameScene.ui.gameRoomImagesChairOrPlayer[i] = pokerChair;
                 }
+                // 即使是椅子，如果有观察者数据也要画出来
+                if (p) {
+                    this_1.SetObText(p, i, this_1.gameScene, 80);
+                }
             }
             else {
                 if (shouldReDrawChairOrPlayer) {
@@ -309,17 +354,28 @@ var MainForm = /** @class */ (function () {
                         var playerUI = this_1.CreatePlayer(i, p.PlayerId, this_1.gameScene.ui.frameGameRoom);
                         this_1.gameScene.ui.gameRoomImagesChairOrPlayer[i] = playerUI;
                         var skinType = this_1.GetSkinType(skinInUse);
-                        var skinExtention = skinType === 0 ? "webp" : "gif";
-                        var skinURL = "image/tractor/skin/".concat(skinInUse, ".").concat(skinExtention);
+                        var skinURL = "";
+                        if (skinInUse.startsWith("URL:")) {
+                            skinURL = skinInUse;
+                        } else {
+                            var skinExtention = skinType === 0 ? "webp" : "gif";
+                            skinURL = "image/tractor/skin/".concat(skinInUse, ".").concat(skinExtention);
+                        }
                         this_1.SetAvatarImage(false, this_1.gameScene, i, skinType, skinURL, playerUI, this_1.gameScene.coordinates.cardHeight, this_1.SetObText, p);
                     }
                     else {
+                        this_1.gameScene.ui.gameMe.show(); // 核心修复：如果是坐着的玩家，确保显示头像框
                         this_1.gameScene.ui.gameMe.node.nameol.innerHTML = this_1.gameScene.hidePlayerID ? "" : this_1.tractorPlayer.PlayerId;
                         var skinInUseMe = this_1.tractorPlayer.isObserver ? skinInUse : this_1.gameScene.skinInUse;
                         var skinTypeMe = this_1.GetSkinType(skinInUseMe);
-                        var skinExtentionMe = skinTypeMe === 0 ? "webp" : "gif";
-                        var skinURL = "image/tractor/skin/".concat(skinInUseMe, ".").concat(skinExtentionMe);
-                        this_1.SetAvatarImage(false, this_1.gameScene, i, skinTypeMe, skinURL, this_1.gameScene.ui.gameMe, this_1.gameScene.coordinates.cardHeight, this_1.SetObText, p);
+                        var skinURLMe = "";
+                        if (skinInUseMe.startsWith("URL:")) {
+                            skinURLMe = skinInUseMe;
+                        } else {
+                            var skinExtentionMe = skinTypeMe === 0 ? "webp" : "gif";
+                            skinURLMe = "image/tractor/skin/".concat(skinInUseMe, ".").concat(skinExtentionMe);
+                        }
+                        this_1.SetAvatarImage(false, this_1.gameScene, i, skinTypeMe, skinURLMe, this_1.gameScene.ui.gameMe, this_1.gameScene.coordinates.cardHeight, this_1.SetObText, p);
                     }
                     // 旁观玩家切换视角/房主将玩家请出房间
                     if ((this_1.tractorPlayer.isObserver || this_1.tractorPlayer.CurrentRoomSetting.RoomOwner === this_1.tractorPlayer.MyOwnId) && i !== 0) {
@@ -372,7 +428,7 @@ var MainForm = /** @class */ (function () {
         }
     };
     MainForm.prototype.SetObText = function (p, i, gs, skinWid) {
-        if (gs.hidePlayerID)
+        if (gs.hidePlayerID || !p) // 核心修复：增加 p 存在性检查，防止异步刷新导致的崩溃
             return;
         if (p.Observers && p.Observers.length > 0) {
             var obNameText = "";
@@ -431,31 +487,44 @@ var MainForm = /** @class */ (function () {
         }));
     };
     MainForm.prototype.ExitAndObserve = function () {
-        if (CommonMethods.AllOnline(this.tractorPlayer.CurrentGameState.Players) && !this.tractorPlayer.isObserver && SuitEnums.HandStep.DiscardingLast8Cards <= this.tractorPlayer.CurrentHandState.CurrentHandStep && this.tractorPlayer.CurrentHandState.CurrentHandStep <= SuitEnums.HandStep.Playing) {
+        var step = this.tractorPlayer.CurrentHandState.CurrentHandStep;
+        var isIdle = (step === SuitEnums.HandStep.BeforeDistributingCards || step === SuitEnums.HandStep.Ending);
+        
+        if (!isIdle) {
             alert("游戏中途不允许上树,请完成此盘游戏后重试");
+            return;
         }
-        else {
-            this.destroyGameRoom();
-            this.gameScene.sendMessageToServer(PLAYER_EXIT_AND_OBSERVE_REQUEST, this.tractorPlayer.MyOwnId, "");
-        }
+
+        if (this.tractorPlayer.isObserver) return;
+
+        // 核心优化：不再在前端拦截唯一真人的上树请求。
+        // 后端 forceLeave 会自动处理房主权移交或悬空。
+        console.log("[Observe] 点击上树, 当前状态:", { step: step, isIdle: isIdle });
+        this.destroyGameRoom();
+        this.gameScene.sendMessageToServer(PLAYER_EXIT_AND_OBSERVE_REQUEST, this.tractorPlayer.MyOwnId, "");
     };
     MainForm.prototype.PauseOrContinueGame = function () {
         if (!this.gameScene.ui.btnPauseOrContinueGame || this.gameScene.ui.btnPauseOrContinueGame.classList.contains('hidden') || this.gameScene.ui.btnPauseOrContinueGame.classList.contains('disabled'))
             return;
         this.gameScene.ui.btnPauseOrContinueGame.hide();
-        var newVal = 0;
-        if (this.tractorPlayer.CurrentRoomSetting.secondsToShowCards == 0) {
-            // 如果是从0变为正数，则是继续，则取上次的值：secondsToShowCardsPrev
+        
+        // 核心修复：显式切换 IsPaused 状态，并同步倒计时秒数
+        this.tractorPlayer.CurrentRoomSetting.IsPaused = !this.tractorPlayer.CurrentRoomSetting.IsPaused;
+        
+        var newVal = this.tractorPlayer.CurrentRoomSetting.secondsToShowCards;
+        if (this.tractorPlayer.CurrentRoomSetting.IsPaused) {
+            // 暂停：记录当前秒数，然后设为 0（触发后端计时器清理）
+            this.tractorPlayer.CurrentRoomSetting.secondsToShowCardsPrev = this.tractorPlayer.CurrentRoomSetting.secondsToShowCards;
+            newVal = 0;
+        }
+        else {
+            // 继续：恢复之前的秒数
             if (this.tractorPlayer.CurrentRoomSetting.secondsToShowCardsPrev == 0) {
-                // 如果是初次设置，secondsToShowCardsPrev将会是0，则赋予secondsToShowCardsPrev一个默认非0的值
                 this.tractorPlayer.CurrentRoomSetting.secondsToShowCardsPrev = 30;
             }
             newVal = this.tractorPlayer.CurrentRoomSetting.secondsToShowCardsPrev;
         }
-        else {
-            // 否则是从正数变为0，则是暂停，则将当前的正数赋予上次的值：secondsToShowCardsPrev，以便下次继续时还原为此正数值
-            this.tractorPlayer.CurrentRoomSetting.secondsToShowCardsPrev = this.tractorPlayer.CurrentRoomSetting.secondsToShowCards;
-        }
+        
         this.tractorPlayer.CurrentRoomSetting.secondsToShowCards = newVal;
         this.gameScene.sendMessageToServer(SaveRoomSetting_REQUEST, this.tractorPlayer.MyOwnId, JSON.stringify(this.tractorPlayer.CurrentRoomSetting));
     };
@@ -668,13 +737,15 @@ var MainForm = /** @class */ (function () {
         // }
     };
     MainForm.prototype.ResetBtnRobot = function () {
-        //摸牌结束，如果处于托管、抢亮状态，则取消之
+        // 核心修复：移除发牌结束后对托管(isRobot)的自动取消，改为仅处理“抢亮”状态的重置
         if (this.tractorPlayer.isObserver)
             return;
         var me = CommonMethods.GetPlayerByID(this.tractorPlayer.CurrentGameState.Players, this.tractorPlayer.MyOwnId);
-        if (me.IsRobot && this.gameScene.ui.btnRobot && this.gameScene.ui.btnRobot.innerHTML === "取消" && !this.tractorPlayer.CurrentRoomSetting.IsFullDebug) {
-            this.btnRobot_Click();
-        }
+        
+        // if (me.IsRobot && this.gameScene.ui.btnRobot && this.gameScene.ui.btnRobot.innerHTML === "取消" && !this.tractorPlayer.CurrentRoomSetting.IsFullDebug) {
+        //     this.btnRobot_Click();
+        // }
+
         if (me.IsQiangliang && this.gameScene.ui.btnQiangliang && this.gameScene.ui.btnQiangliang.innerHTML === "取消" && !this.tractorPlayer.CurrentRoomSetting.IsFullDebug) {
             this.btnQiangliang_Click();
         }
@@ -803,8 +874,7 @@ var MainForm = /** @class */ (function () {
             if (this.tractorPlayer.CurrentRoomSetting.HideOverridingFlag) {
                 this.gameScene.playAudio(0, this.GetPlayerSex(latestPlayer));
             }
-            else if (!this.tractorPlayer.playerLocalCache.isLastTrick &&
-                !this.IsDebug &&
+            else if (!this.IsDebug &&
                 !this.tractorPlayer.CurrentTrickState.serverLocalCache.muteSound) {
                 var soundInex = winResult;
                 if (winResult > 0)
@@ -1000,13 +1070,102 @@ var MainForm = /** @class */ (function () {
                     }
                 }
                 if (curPlayer && curPlayer.IsRobot) {
-                    this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "".concat(this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML, "\u3010\u6258\u3011");
+                    var suffix = curPlayer.PlayerId.endsWith('[bot]') ? "[bot]" : "【托】";
+                    this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "".concat(this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML, suffix);
                 }
                 if (isUsingQiangliangka) {
                     this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "".concat(this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML, "\u3010\u62A2\u3011");
                 }
             }
             curIndex = (curIndex + 1) % 4;
+        }
+    };
+    MainForm.prototype.UpdateRobotButtonStatus = function () {
+        if (!this.gameScene.ui.btnRobot) return;
+        var step = this.tractorPlayer.CurrentHandState.CurrentHandStep;
+        var myOwnId = this.tractorPlayer.MyOwnId;
+        var shengbi = 0;
+        if (this.DaojuInfo && this.DaojuInfo.daojuInfoByPlayer && this.DaojuInfo.daojuInfoByPlayer[myOwnId]) {
+            shengbi = parseInt(this.DaojuInfo.daojuInfoByPlayer[myOwnId].Shengbi);
+        }
+
+        // 机器人/托管按钮逻辑
+        var canRobot = (step >= SuitEnums.HandStep.DiscardingLast8Cards && step <= SuitEnums.HandStep.Playing);
+        if (canRobot && !this.tractorPlayer.isObserver) {
+            this.gameScene.ui.btnRobot.classList.remove('disabled');
+            this.gameScene.ui.btnRobot.classList.add('pointerdiv');
+        } else {
+            this.gameScene.ui.btnRobot.classList.add('disabled');
+            this.gameScene.ui.btnRobot.classList.remove('pointerdiv');
+            // 托管最多到本局结束：如果已经结束且还在托管，则取消之
+            if (this.IsDebug && step >= SuitEnums.HandStep.Ending) { this.PlayerToggleIsRobot(false); }
+        }
+
+        // 抢亮按钮逻辑
+        if (this.gameScene.ui.btnQiangliang) {
+            var isReady = false;
+            var me = this.tractorPlayer.CurrentGameState.Players.find(p => p.PlayerId === this.tractorPlayer.MyOwnId);
+            if (me) isReady = me.IsReadyToStart;
+
+            // 修正：只有在发牌过程中 (Step 1) 才允许点击
+            var canQiangliang = (step === SuitEnums.HandStep.DistributingCards && shengbi >= CommonMethods.qiangliangkaCost);
+            
+            if (canQiangliang && !this.tractorPlayer.isObserver) {
+                this.gameScene.ui.btnQiangliang.classList.remove('disabled');
+                this.gameScene.ui.btnQiangliang.classList.add('pointerdiv');
+            } else {
+                // 如果已经激活了，但在发牌结束或之后，自动帮玩家点掉“取消”
+                if (this.IsQiangliang && step >= SuitEnums.HandStep.DistributingCardsFinished) {
+                    this.btnQiangliang_Click(); 
+                }
+                this.gameScene.ui.btnQiangliang.classList.add('disabled');
+                this.gameScene.ui.btnQiangliang.classList.remove('pointerdiv');
+            }
+        }
+
+        // 上树按钮逻辑 (btnExitAndObserve)
+        if (this.gameScene.ui.btnExitAndObserve) {
+            // 只有在未开局或局后允许上树
+            var isIdle = (step === SuitEnums.HandStep.BeforeDistributingCards || step === SuitEnums.HandStep.Ending);
+            var otherRealSeated = this.tractorPlayer.CurrentGameState.Players.filter(p => p && p.PlayerId && !p.PlayerId.endsWith('[bot]') && !p.PlayerId.startsWith('[空位') && p.PlayerId !== this.tractorPlayer.MyOwnId).length;
+            
+            // 如果我是房主，必须有其他真人坐着才能上树
+            var canObserve = isIdle && (!this.tractorPlayer.isObserver) && (this.tractorPlayer.CurrentRoomSetting.RoomOwner !== this.tractorPlayer.MyOwnId || otherRealSeated > 0);
+
+            if (canObserve) {
+                this.gameScene.ui.btnExitAndObserve.classList.remove('disabled');
+                this.gameScene.ui.btnExitAndObserve.classList.add('pointerdiv');
+            } else {
+                this.gameScene.ui.btnExitAndObserve.classList.add('disabled');
+                this.gameScene.ui.btnExitAndObserve.classList.remove('pointerdiv');
+            }
+        }
+
+        // 设置按钮逻辑 (btnSettings)
+        if (this.gameScene.ui.btnSettings) {
+            if (this.tractorPlayer.isObserver) {
+                this.gameScene.ui.btnSettings.classList.add('disabled');
+                this.gameScene.ui.btnSettings.classList.remove('pointerdiv');
+            } else {
+                this.gameScene.ui.btnSettings.classList.remove('disabled');
+                this.gameScene.ui.btnSettings.classList.add('pointerdiv');
+            }
+        }
+
+        // 暂停/继续按钮逻辑 (btnPauseOrContinueGame) - 核心修复：视觉显式置灰
+        if (this.gameScene.ui.btnPauseOrContinueGame) {
+            var isPlaying = (step === SuitEnums.HandStep.Playing);
+            if (isPlaying) {
+                this.gameScene.ui.btnPauseOrContinueGame.classList.remove('disabled');
+                this.gameScene.ui.btnPauseOrContinueGame.classList.add('pointerdiv');
+                this.gameScene.ui.btnPauseOrContinueGame.style.opacity = "1";
+                this.gameScene.ui.btnPauseOrContinueGame.style.filter = "none";
+            } else {
+                this.gameScene.ui.btnPauseOrContinueGame.classList.add('disabled');
+                this.gameScene.ui.btnPauseOrContinueGame.classList.remove('pointerdiv');
+                this.gameScene.ui.btnPauseOrContinueGame.style.opacity = "0.5";
+                this.gameScene.ui.btnPauseOrContinueGame.style.filter = "grayscale(1)";
+            }
         }
     };
     MainForm.prototype.btnReady_Click = function () {
@@ -1022,7 +1181,7 @@ var MainForm = /** @class */ (function () {
     MainForm.prototype.btnQiangliang_Click = function () {
         if (!this.gameScene.ui.btnQiangliang || this.gameScene.ui.btnQiangliang.classList.contains('hidden') || this.gameScene.ui.btnQiangliang.classList.contains('disabled'))
             return;
-        this.gameScene.sendMessageToServer(ToggleIsQiangliang_REQUEST, this.tractorPlayer.PlayerId, "");
+        this.gameScene.sendMessageToServer(ToggleIsQiangliang_REQUEST, this.tractorPlayer.PlayerId, this.gameScene.qiangliangMin);
     };
     MainForm.prototype.btnRobot_Click = function () {
         if (!this.gameScene.ui.btnRobot || this.gameScene.ui.btnRobot.classList.contains('hidden') || this.gameScene.ui.btnRobot.classList.contains('disabled'))
@@ -1271,7 +1430,8 @@ var MainForm = /** @class */ (function () {
             var isSkinOwned = _this.IsSkinOwned(skinName);
             if (isSkinOwned) {
                 gs.sendMessageToServer(BUY_USE_SKIN_REQUEST, _this.tractorPlayer.MyOwnId, skinName);
-                _this.resetGameRoomUI();
+                // 传入 true，告知关闭窗口时不要立即重刷皮肤，等待服务器确认
+                _this.resetGameRoomUI(true); 
                 return;
             }
             var isSkinAfordableWithConfMsg = _this.IsSkinAfordableWithConfMsg(skinName);
@@ -1290,7 +1450,7 @@ var MainForm = /** @class */ (function () {
                 }
                 if (doTransaction) {
                     gs.sendMessageToServer(BUY_USE_SKIN_REQUEST, _this.tractorPlayer.MyOwnId, skinName);
-                    _this.resetGameRoomUI();
+                    _this.resetGameRoomUI(true);
                 }
             }
         };
@@ -1432,21 +1592,15 @@ var MainForm = /** @class */ (function () {
         }
     };
     MainForm.prototype.isNoDongtuUntilExpired = function (daojuInfo) {
-        if (!daojuInfo || !daojuInfo.daojuInfoByPlayer || !daojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noDongtuUntil)
+        if (!daojuInfo || !daojuInfo.daojuInfoByPlayer || !daojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId] || !daojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noDongtuUntil)
             return true;
         var dExp = new Date(daojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noDongtuUntil);
         var dNow = new Date();
         return dExp < dNow;
     };
     MainForm.prototype.isChatBanned = function (pid) {
-        if (Object.keys(this.DaojuInfo).length === 0) {
-            console.log("this.DaojuInfo is empty");
-        }
-        else if (Object.keys(this.DaojuInfo.daojuInfoByPlayer).length === 0) {
-            console.log("this.DaojuInfo.daojuInfoByPlayer is empty");
-        }
-        else if (!this.DaojuInfo.daojuInfoByPlayer.hasOwnProperty(pid)) {
-            console.log("this.DaojuInfo.daojuInfoByPlayer is missing playerID as key: ".concat(pid));
+        if (!this.DaojuInfo || !this.DaojuInfo.daojuInfoByPlayer || !this.DaojuInfo.daojuInfoByPlayer[pid]) {
+            return false;
         }
         if (this.DaojuInfo.daojuInfoByPlayer[pid].noChatUntil) {
             var dBanned = new Date(this.DaojuInfo.daojuInfoByPlayer[pid].noChatUntil);
@@ -1455,32 +1609,112 @@ var MainForm = /** @class */ (function () {
         }
         return false;
     };
+    // 核心集成优化：退出即清理凭据，显示离线画面
     MainForm.prototype.btnExitRoom_Click = function () {
+        var _this = this;
         if (this.gameScene.isReplayMode) {
             window.location.reload();
             return;
         }
-        if (CommonMethods.AllOnline(this.tractorPlayer.CurrentGameState.Players) && !this.tractorPlayer.isObserver && SuitEnums.HandStep.DiscardingLast8Cards <= this.tractorPlayer.CurrentHandState.CurrentHandStep && this.tractorPlayer.CurrentHandState.CurrentHandStep <= SuitEnums.HandStep.Playing) {
-            var c = window.confirm("游戏中途退出将会重启游戏，是否确定退出？");
-            if (c == true) {
-                window.location.reload();
-            }
-            return;
-        }
         if (this.gameScene.isInGameRoom()) {
+            // 核心功能：逃跑二次确认
+            var step = this.tractorPlayer.CurrentHandState.CurrentHandStep;
+            var initialReal = this.tractorPlayer.CurrentHandState.InitialRealCount;
+            // 如果在对局中 (1-8)，且开局真人 >= 3，执行警告
+            if (step >= SuitEnums.HandStep.DistributingCards && step <= SuitEnums.HandStep.Playing && initialReal >= 3) {
+                // 进一步检查是否还有其他活跃真人（后端最后一人豁免逻辑的前置判断）
+                var activeRealCount = this.tractorPlayer.CurrentGameState.Players.filter(function(p) {
+                    return p && !p.IsOffline && p.PlayerId.indexOf('[bot]') === -1 && p.PlayerId.indexOf('【逃】') === -1;
+                }).length;
+
+                if (activeRealCount > 1) {
+                    var c = window.confirm("当前对局正在计分，退出将计入逃跑战绩！\n\n是否确定要逃离对局？");
+                    if (!c) return;
+                }
+            }
+
+            // 核心修复：点击退出时，立即清理下拉框中的所有“★”特殊命令
+            var selectPresetMsgs = this.gameScene.ui.selectPresetMsgs;
+            if (selectPresetMsgs) {
+                for (var i = selectPresetMsgs.options.length - 1; i >= 0; i--) {
+                    if (selectPresetMsgs.options[i].text.indexOf("★") === 0) {
+                        selectPresetMsgs.remove(i);
+                    }
+                }
+                // 仅保留管理员命令（如果此人是管理员）
+                if (this.tractorPlayer.isAdmin) {
+                    var adminOpt = document.createElement("option");
+                    adminOpt.value = "命令：刷新游戏设置";
+                    adminOpt.text = "★ 管理员：刷新游戏设置";
+                    selectPresetMsgs.appendChild(adminOpt);
+                }
+            }
             this.gameScene.sendMessageToServer(ExitRoom_REQUEST, this.tractorPlayer.MyOwnId, "");
             return;
         }
+        localStorage.removeItem('tractor_auto_sid');
+        sessionStorage.setItem('isManualLogout', 'true');
         window.location.reload();
+    };
+
+    MainForm.prototype.showOfflineScreen = function (msg) {
+        localStorage.removeItem('tractor_auto_sid');
+        sessionStorage.setItem('isManualLogout', 'true');
+        this.destroyGameRoom();
+        this.destroyGameHall();
+        if (this.gameScene.ui.frameMain) {
+            while (this.gameScene.ui.frameMain.firstChild) {
+                this.gameScene.ui.frameMain.removeChild(this.gameScene.ui.frameMain.firstChild);
+            }
+        }
+        this.tractorPlayer.NotifyMessage([msg]);
+        if (window.lib && window.lib.init && window.lib.init.onfree) {
+            window.lib.init.onfree();
+        }
+    };    
+    MainForm.prototype.clearManualLogout = function() {
+        sessionStorage.removeItem('isManualLogout');
     };
     MainForm.prototype.handleSelectPresetMsgsClick = function (selectPresetMsgs) {
         if (this.selectPresetMsgsIsOpen) {
             this.selectPresetMsgsIsOpen = false;
             this.sendPresetMsgs(selectPresetMsgs);
         }
-        else {
-            this.selectPresetMsgsIsOpen = true;
-        }
+    };
+
+    MainForm.prototype.showOfflineScreen = function (msg) {
+        localStorage.removeItem("tractor_auto_sid");
+        sessionStorage.setItem("isManualLogout", "true");
+        this.destroyGameRoom();
+        this.destroyGameHall();
+        
+        var overlay = document.createElement("div");
+        overlay.style.position = "fixed";
+        overlay.style.top = "0";
+        overlay.style.left = "0";
+        overlay.style.width = "100%";
+        overlay.style.height = "100%";
+        overlay.style.background = "rgba(0,0,0,0.85)";
+        overlay.style.zIndex = "99999";
+        overlay.style.display = "flex";
+        overlay.style.flexDirection = "column";
+        overlay.style.justifyContent = "center";
+        overlay.style.alignItems = "center";
+        document.body.appendChild(overlay);
+
+        var text = document.createElement("div");
+        text.innerText = msg;
+        text.style.color = "yellow";
+        text.style.fontSize = "30px";
+        text.style.marginBottom = "20px";
+        overlay.appendChild(text);
+
+        var btn = document.createElement("div");
+        btn.className = "menubutton highlight large";
+        btn.innerText = "确定";
+        btn.style.marginTop = "200px";
+        btn.onclick = function() { window.location.reload(); };
+        overlay.appendChild(btn);
     };
     MainForm.prototype.sendPresetMsgs = function (selectPresetMsgs) {
         var selectedIndex = selectPresetMsgs.selectedIndex;
@@ -1620,6 +1854,8 @@ var MainForm = /** @class */ (function () {
     MainForm.prototype.UpdateSkinInfoUI = function (preview) {
         var _this = this;
         var selectFullSkinInfo = document.getElementById("selectFullSkinInfo");
+        if (!selectFullSkinInfo) return;
+        
         var lblSkinType = document.getElementById("lblSkinType");
         var lblSkinCost = document.getElementById("lblSkinCost");
         var lblSkinOnwers = document.getElementById("lblSkinOnwers");
@@ -1628,80 +1864,92 @@ var MainForm = /** @class */ (function () {
         var btnBuyOrUseSelectedSkin = document.getElementById("btnBuyOrUseSelectedSkin");
         var curSkinInfo;
         var fullSkinInfo = this.gameScene.ui.fullSkinInfoResources;
+
         var daojuInfoByPlayer = this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId];
         if (daojuInfoByPlayer) {
             if (fullSkinInfo) {
-                if (selectFullSkinInfo.options.length === 0) {
-                    // Convert to array of entries
-                    var fullSkinInfoKeyValuePairSorted = Object.entries(fullSkinInfo).sort(function (_a, _b) {
-                        var a = _a[1];
-                        var b = _b[1];
-                        // 1. sort by skinCost
-                        if (a.skinCost !== b.skinCost) {
-                            return a.skinCost - b.skinCost;
-                        }
-                        // 2. then by skinSex (lexicographically)
-                        if (a.skinSex !== b.skinSex) {
-                            return a.skinSex.localeCompare(b.skinSex);
-                        }
-                        // 3. then by skinType
-                        if (a.skinType !== b.skinType) {
-                            return a.skinType - b.skinType;
-                        }
-                        // 4. finally by skinDesc (lexicographically)
-                        return a.skinDesc.localeCompare(b.skinDesc);
-                    });
-                    for (var i = 0; i < fullSkinInfoKeyValuePairSorted.length; i++) {
-                        var entryKey = fullSkinInfoKeyValuePairSorted[i][0];
-                        var entryValue = fullSkinInfoKeyValuePairSorted[i][1];
-                        var option = document.createElement("option");
-                        option.value = entryKey;
-                        option.text = "".concat(entryValue.skinDesc, " - \u4EF7\u683C\u3010").concat(entryValue.skinCost, "\u3011\u5347\u5E01");
-                        selectFullSkinInfo.add(option);
-                    }
-                    selectFullSkinInfo.value = this.gameScene.skinInUse;
+                // 核心修复：移除 options.length === 0 的限制，允许每次重建列表以同步“已拥有”状态
+                var currentSelection = selectFullSkinInfo.value;
+                selectFullSkinInfo.options.length = 0; 
+                
+                var ownedSkinInfoList_1 = daojuInfoByPlayer.ownedSkinInfo || [];
+                
+                // 1. 论坛头像：仅在“已拥有”时才注入 (由后端根据是否有 phpBB 头像判定)
+                if (ownedSkinInfoList_1.includes("forum_avatar")) {
+                    var optionForum = document.createElement("option");
+                    optionForum.value = "forum_avatar";
+                    optionForum.text = "论坛头像 - 【已拥有】";
+                    selectFullSkinInfo.add(optionForum);
                 }
-                curSkinInfo = fullSkinInfo[selectFullSkinInfo.value];
-                if (curSkinInfo) {
-                    lblSkinSex.innerHTML = curSkinInfo.skinSex === "f" ? "女性" : "男性";
-                    lblSkinType.innerHTML = curSkinInfo.skinType === 0 ? "静态" : "动态";
-                    lblSkinCost.innerHTML = "\u3010\u5347\u5E01\u3011x".concat(curSkinInfo.skinCost);
-                    var skinOwnersMsg = "\u6B64\u76AE\u80A4\u5C1A\u672A\u88AB\u4EBA\u89E3\u9501";
-                    if (curSkinInfo.skinOwners > 0) {
-                        skinOwnersMsg = "\u5DF2\u6709\u3010".concat(curSkinInfo.skinOwners, "\u3011\u4EBA\u62E5\u6709\u6B64\u76AE\u80A4");
+
+                // 2. 按价格排序其他皮肤 (按价格)
+                var sortedSkins = Object.entries(fullSkinInfo).sort(function (_a, _b) {
+                    var a = _a[1], b = _b[1];
+                    return a.skinCost - b.skinCost;
+                });
+
+                for (var i = 0; i < sortedSkins.length; i++) {
+                    var key = sortedSkins[i][0], val = sortedSkins[i][1];
+                    if (key === "forum_avatar" || key === "skin_questionmark") continue;
+                    var option = document.createElement("option");
+                    option.value = key;
+                    var isOwned = ownedSkinInfoList_1.includes(key);
+                    var priceText = isOwned ? "【已拥有】" : "\u4EF7\u683C\u3010".concat(val.skinCost, "\u3011\u5347\u5E01");
+                    option.text = "".concat(val.skinDesc, " - ").concat(priceText);
+                    selectFullSkinInfo.add(option);
+                }
+                
+                // 恢复选中项 (增加 null 判定防御)
+                if (currentSelection) {
+                    selectFullSkinInfo.value = currentSelection;
+                } else {
+                    var curSkin = this.gameScene.skinInUse;
+                    selectFullSkinInfo.value = (curSkin && curSkin.startsWith("URL:")) ? "forum_avatar" : (curSkin || "skin_basicmale");
+                }
+
+                if (selectFullSkinInfo.value === "forum_avatar") {
+                    lblSkinSex.innerHTML = "未知";
+                    lblSkinType.innerHTML = "静态";
+                    lblSkinCost.innerHTML = "免费";
+                    lblSkinOnwers.innerHTML = "您的论坛专属头像";
+                    lblSkinIsOwned.innerHTML = "已经拥有";
+                    btnBuyOrUseSelectedSkin.disabled = this.gameScene.skinInUse.startsWith("URL:");
+                    btnBuyOrUseSelectedSkin.value = this.gameScene.skinInUse.startsWith("URL:") ? "正在使用中" : "启用此头像";
+                }
+                else {
+                    curSkinInfo = fullSkinInfo[selectFullSkinInfo.value];
+                    if (curSkinInfo) {
+                        lblSkinSex.innerHTML = curSkinInfo.skinSex === "f" ? "女性" : "男性";
+                        lblSkinType.innerHTML = curSkinInfo.skinType === 0 ? "静态" : "动态";
+                        lblSkinCost.innerHTML = "\u3010\u5347\u5E01\u3011x".concat(curSkinInfo.skinCost);
+                        var skinOwnersMsg = curSkinInfo.skinOwners > 0 ? "\u5DF2\u6709\u3010".concat(curSkinInfo.skinOwners, "\u3011\u4EBA\u62E5\u6709") : "尚未有人拥有";
+                        lblSkinOnwers.innerHTML = skinOwnersMsg;
+                        lblSkinIsOwned.innerHTML = "尚未拥有";
+                        btnBuyOrUseSelectedSkin.disabled = false;
+                        btnBuyOrUseSelectedSkin.value = "购买选定的皮肤";
                     }
-                    lblSkinOnwers.innerHTML = skinOwnersMsg;
-                    lblSkinIsOwned.innerHTML = "尚未拥有";
-                    btnBuyOrUseSelectedSkin.disabled = false;
-                    btnBuyOrUseSelectedSkin.value = "购买选定的皮肤";
                 }
             }
-            var ownedSkinInfoList = daojuInfoByPlayer.ownedSkinInfo;
-            if (ownedSkinInfoList && ownedSkinInfoList.includes(selectFullSkinInfo.value)) {
+            var ownedSkinInfoList = daojuInfoByPlayer.ownedSkinInfo || [];
+            if (selectFullSkinInfo.value !== "forum_avatar" && ownedSkinInfoList.includes(selectFullSkinInfo.value)) {
                 lblSkinIsOwned.innerHTML = "已经拥有";
-                btnBuyOrUseSelectedSkin.disabled = false;
-                btnBuyOrUseSelectedSkin.value = "启用选定的皮肤";
-                if (this.gameScene.skinInUse === selectFullSkinInfo.value) {
-                    btnBuyOrUseSelectedSkin.disabled = true;
-                    btnBuyOrUseSelectedSkin.value = "正在使用选定的皮肤";
-                }
+                btnBuyOrUseSelectedSkin.disabled = (this.gameScene.skinInUse === selectFullSkinInfo.value);
+                btnBuyOrUseSelectedSkin.value = (this.gameScene.skinInUse === selectFullSkinInfo.value) ? "正在使用中" : "启用选定的皮肤";
             }
         }
-        if (preview && (!this.gameScene.isInGameRoom() || !this.tractorPlayer.isObserver)) {
-            // 皮肤预览
-            if (curSkinInfo) {
-                var skinExtention = curSkinInfo.skinType === 0 ? "webp" : "gif";
-                var skinURL = "image/tractor/skin/".concat(curSkinInfo.skinName, ".").concat(skinExtention);
-                this.SetAvatarImage(true, this.gameScene, 0, curSkinInfo.skinType, skinURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
-                if (this.skinPreviewTimer)
-                    clearTimeout(this.skinPreviewTimer);
-                this.skinPreviewTimer = setTimeout(function () {
-                    var skinTypeMe = _this.GetSkinType(_this.gameScene.skinInUse);
-                    var skinExtentionMe = skinTypeMe === 0 ? "webp" : "gif";
-                    var skinURL = "image/tractor/skin/".concat(_this.gameScene.skinInUse, ".").concat(skinExtentionMe);
-                    _this.SetAvatarImage(false, _this.gameScene, 0, skinTypeMe, skinURL, _this.gameScene.ui.gameMe, _this.gameScene.coordinates.cardHeight);
-                    delete _this.skinPreviewTimer;
-                }, 3000);
+        if (preview) {
+            // 皮肤预览 (已移除 3 秒自动恢复定时器，由 resetGameRoomUI 统一恢复)
+            var isForum = selectFullSkinInfo.value === "forum_avatar";
+            if (isForum || curSkinInfo) {
+                if (isForum) {
+                    var forumAvatarURL = daojuInfoByPlayer.forumAvatarURL;
+                    if (forumAvatarURL && forumAvatarURL.startsWith("URL:")) {
+                        this.SetAvatarImage(true, this.gameScene, 0, 0, forumAvatarURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
+                    }
+                } else {
+                    var skinURL = "image/tractor/skin/".concat(curSkinInfo.skinName, ".").concat(curSkinInfo.skinType === 0 ? "webp" : "gif");
+                    this.SetAvatarImage(true, this.gameScene, 0, curSkinInfo.skinType, skinURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
+                }
             }
         }
     };
@@ -1894,7 +2142,7 @@ var MainForm = /** @class */ (function () {
             this.drawingFormHelper.DrawOverridingFlag(cardsCount, this.PlayerPosition[this.tractorPlayer.playerLocalCache.WinnderID], this.tractorPlayer.playerLocalCache.WinResult - 1, false);
         }
     };
-    MainForm.prototype.resetGameRoomUI = function () {
+    MainForm.prototype.resetGameRoomUI = function (skipSkinRefresh) {
         this.blurChat();
         if (this.gameScene.ui.inputFormWrapper) {
             if (document.getElementById("btnBapi1")) {
@@ -1905,6 +2153,11 @@ var MainForm = /** @class */ (function () {
             }
             this.gameScene.ui.inputFormWrapper.remove();
             delete this.gameScene.ui.inputFormWrapper;
+            
+            // 核心修复：除非明确要求跳过（如刚点击购买），否则关闭菜单后恢复正式皮肤
+            if (!skipSkinRefresh) {
+                this.UpdateSkinStatus();
+            }
         }
     };
     MainForm.prototype.ShowLastTrickAndTumpMade = function () {
@@ -2018,6 +2271,22 @@ var MainForm = /** @class */ (function () {
             option.text = "".concat(shortCutKeyChar, "-").concat(CommonMethods.emojiMsgs[i]);
             selectChatPresetMsgs.appendChild(option);
         }
+
+        // 核心扩展：为房主/管理员添加特殊指令
+        var isOwner = this.tractorPlayer.CurrentRoomSetting && this.tractorPlayer.MyOwnId === this.tractorPlayer.CurrentRoomSetting.RoomOwner;
+        if (isOwner && this.gameScene.isInGameRoom()) {
+            var opt = document.createElement("option");
+            opt.value = "命令：一键填满bot";
+            opt.text = "★ 命令：一键填满bot";
+            selectChatPresetMsgs.appendChild(opt);
+        }
+        if (this.tractorPlayer.isAdmin) {
+            var adminOpt = document.createElement("option");
+            adminOpt.value = "命令：刷新游戏设置";
+            adminOpt.text = "★ 管理员：刷新游戏设置";
+            selectChatPresetMsgs.appendChild(adminOpt);
+        }
+
         selectChatPresetMsgs.addEventListener('change', function () {
             _this.selectPresetMsgsIsOpen = true;
             _this.handleSelectPresetMsgsClick(selectChatPresetMsgs);
@@ -2211,6 +2480,7 @@ var MainForm = /** @class */ (function () {
         frameGameHallOnliners.style.paddingLeft = '10px';
         frameGameHallOnliners.style.overflow = 'auto';
         this.gameScene.ui.frameGameHallOnliners = frameGameHallOnliners;
+        /*
         var pYuezhanHeader = document.createElement("p");
         pYuezhanHeader.innerText = "\u7EA6\u6218(".concat(yuezhanList.length, ")");
         pYuezhanHeader.style.marginTop = '0px';
@@ -2219,6 +2489,7 @@ var MainForm = /** @class */ (function () {
         pYuezhanHeader.style.textAlign = 'left';
         pYuezhanHeader.style.whiteSpace = 'nowrap';
         this.gameScene.ui.frameGameHallOnlinersHeader.appendChild(pYuezhanHeader);
+         */
         var playerListAll = CommonMethods.deepCopy(playerList);
         var frameGameHallTables = this.gameScene.ui.create.div('.frameGameHallTables', this.gameScene.ui.frameGameHall);
         frameGameHallTables.style.position = 'absolute';
@@ -2290,42 +2561,74 @@ var MainForm = /** @class */ (function () {
                         break;
                 }
                 if (roomStateList[i].CurrentGameState.Players[j] != null) {
-                    obCount = roomStateList[i].CurrentGameState.Players[j].Observers.length;
-                    obTopOffset = 20;
-                    var leftOffsetPlayer = "calc(".concat(leftOffset, "% - 80px)");
-                    var topOffsetPlayer = topOffsetChair;
-                    switch (j) {
-                        case 0:
-                            topOffsetPlayer = "calc(".concat(topOffset, "% - 120px)");
-                            if (obCount > 0) {
-                                topOffsetPlayer = "calc(".concat(topOffset, "% - 120px - ").concat(obCount * obTopOffset, "px)");
-                            }
-                            break;
-                        case 1:
-                            leftOffsetPlayer = "calc(".concat(leftOffset, "% - 250px)");
-                            break;
-                        case 3:
-                            leftOffsetPlayer = "calc(".concat(leftOffset, "% + 90px)");
-                            break;
-                        default:
-                            break;
+                    var p_1 = roomStateList[i].CurrentGameState.Players[j];
+                    var pid = p_1.PlayerId;
+                    
+                    if (pid) {
+                        playerListAll.push(pid);
+
+                        // 1. 使用标准组件创建玩家 (初始隐藏，防止大框残影闪烁)
+                        var localPlayerUI = this_2.CreatePlayer(j, pid, this_2.gameScene.ui.frameGameHallTables);
+                        localPlayerUI.style.visibility = "hidden"; 
+                        localPlayerUI.style.left = leftOffsetChair;
+                        localPlayerUI.style.top = topOffsetChair;
+                        localPlayerUI.style.zIndex = CommonMethods.zIndexPlayer;
+
+                        // 2. 获取皮肤
+                        var skinInUse = this_2.DaojuInfo.daojuInfoByPlayer[pid] ? this_2.DaojuInfo.daojuInfoByPlayer[pid].skinInUse : CommonMethods.defaultSkinInUse;
+                        var skinType = this_2.GetSkinType(skinInUse);
+                        var skinURL = skinInUse.startsWith("URL:") ? skinInUse : "image/tractor/skin/".concat(skinInUse, ".").concat(skinType === 0 ? "webp" : "gif");
+                        
+                        // 3. 核心对齐：在算出宽高并定位完成后，再显示头像
+                        this_2.SetAvatarImage(false, this_2.gameScene, j, skinType, skinURL, localPlayerUI, 80, function(p, pos, gs, w, h) {
+                            var dx = (80 - w) / 2;
+                            var dy = (80 - h) / 2;
+                            var finalTop = "calc(".concat(topOffsetChair, " + ").concat(dy, "px)");
+                            var liftedTop = "calc(".concat(topOffsetChairLifted, " + ").concat(dy, "px)");
+                            
+                            localPlayerUI.style.left = "calc(".concat(leftOffsetChair, " + ").concat(dx, "px)");
+                            localPlayerUI.style.top = finalTop;
+                            localPlayerUI.style.cursor = "pointer";
+                            // 居中定位已完成，现在揭开面纱
+                            localPlayerUI.style.visibility = "visible";
+
+                            // 增加 Hover 动效
+                            localPlayerUI.addEventListener("mouseover", function () {
+                                localPlayerUI.style.top = liftedTop;
+                            });
+                            localPlayerUI.addEventListener("mouseout", function () {
+                                localPlayerUI.style.top = finalTop;
+                            });
+                        }, p_1);
+                    } else {
+                        // 核心增强：如果是空位带观察者，画椅子
+                        pokerChair = this_2.gameScene.ui.create.div('.pokerChair', this_2.gameScene.ui.frameGameHallTables);
+                        pokerChair.setBackgroundImage('image/tractor/btn/poker_chair.png');
+                        pokerChair.style.left = leftOffsetChair;
+                        pokerChair.style.top = topOffsetChair;
+                        pokerChair.style.width = '80px';
+                        pokerChair.style.height = '80px';
+                        pokerChair.style['background-size'] = '100% 100%';
+                        pokerChair.style['background-repeat'] = 'no-repeat';
+                        pokerChair.style.cursor = 'pointer';
+                        
+                        // 增加交互
+                        pokerChair.addEventListener("click", function (e) {
+                            _this.destroyGameHall();
+                            _this.gameScene.sendMessageToServer(PLAYER_ENTER_ROOM_REQUEST, _this.tractorPlayer.MyOwnId, JSON.stringify({
+                                roomID: i,
+                                posID: j,
+                            }));
+                        });
+                        pokerChair.addEventListener("mouseover", function (e) {
+                            e.target.style.top = topOffsetChairLifted;
+                        });
+                        pokerChair.addEventListener("mouseout", function (e) {
+                            e.target.style.top = topOffsetChair;
+                        });
                     }
-                    var pid = roomStateList[i].CurrentGameState.Players[j].PlayerId;
-                    playerListAll.push(pid);
-                    pokerPlayer = this_2.gameScene.ui.create.div('.pokerPlayer', pid, this_2.gameScene.ui.frameGameHallTables);
-                    pokerPlayer.style.fontFamily = 'serif';
-                    pokerPlayer.style.fontSize = '20px';
-                    pokerPlayer.style.left = leftOffsetPlayer;
-                    pokerPlayer.style.top = topOffsetPlayer;
-                    if (j !== 3)
-                        pokerPlayer.style.width = '160px';
-                    pokerPlayer.style.textAlign = 'center';
-                    if (j === 1) {
-                        pokerPlayer.style.textAlign = 'right';
-                    }
-                    else if (j === 3) {
-                        pokerPlayer.style.textAlign = 'left';
-                    }
+
+                    obCount = p_1.Observers.length;
                     if (obCount > 0) {
                         for (var k = 0; k < roomStateList[i].CurrentGameState.Players[j].Observers.length; k++) {
                             obY = "calc(".concat(topOffset, "% - 40px + ").concat((k + 1) * obTopOffset, "px)");
@@ -2344,7 +2647,7 @@ var MainForm = /** @class */ (function () {
                             pokerPlayerOb = this_2.gameScene.ui.create.div('.pokerPlayerObGameHall', "\u3010".concat(oid, "\u3011"), this_2.gameScene.ui.frameGameHallTables);
                             pokerPlayerOb.style.fontFamily = 'serif';
                             pokerPlayerOb.style.fontSize = '20px';
-                            pokerPlayerOb.style.left = leftOffsetPlayer;
+                            pokerPlayerOb.style.left = leftOffsetChair;
                             pokerPlayerOb.style.top = obY;
                             if (j !== 3)
                                 pokerPlayerOb.style.width = '160px';
@@ -2403,10 +2706,11 @@ var MainForm = /** @class */ (function () {
                 _loop_4(j);
             }
         };
-        var this_2 = this, pokerTable, obCount, obTopOffset, pokerPlayer, obY, pokerPlayerOb, pokerChair;
+        var this_2 = this, pokerTable, obCount, obTopOffset = 20, pokerPlayer, obY, pokerPlayerOb, pokerChair;
         for (var i = 0; i < roomStateList.length; i++) {
             _loop_2(i);
         }
+        /*
         var IOwnYuezhan = false;
         for (var i = 0; i < yuezhanList.length; i++) {
             var yuezhanInfo = yuezhanList[i];
@@ -2524,6 +2828,7 @@ var MainForm = /** @class */ (function () {
         for (var i = 0; i < yuezhanList.length; i++) {
             _loop_3(i);
         }
+        */
     };
     MainForm.prototype.joinOrQuitYuezhan = function (yuezhanEntity) {
         this.gameScene.sendMessageToServer(CommonMethods.SendJoinOrQuitYuezhan_REQUEST, this.tractorPlayer.MyOwnId, JSON.stringify(yuezhanEntity));
@@ -2532,9 +2837,15 @@ var MainForm = /** @class */ (function () {
         this.gameScene.ui.gameMe = this.CreatePlayer(0, this.tractorPlayer.PlayerId, this.gameScene.ui.arena); // creates ui.gameMe
         this.gameScene.ui.gameMe.style.zIndex = CommonMethods.zIndexGameMe;
         if (!this.tractorPlayer.isObserver) {
-            var skinTypeMe = this.GetSkinType(this.gameScene.skinInUse);
-            var skinExtentionMe = skinTypeMe === 0 ? "webp" : "gif";
-            var skinURL = "image/tractor/skin/".concat(this.gameScene.skinInUse, ".").concat(skinExtentionMe);
+            var skinInUseMe = this.gameScene.skinInUse;
+            var skinTypeMe = this.GetSkinType(skinInUseMe);
+            var skinURL = "";
+            if (skinInUseMe.startsWith("URL:")) {
+                skinURL = skinInUseMe;
+            } else {
+                var skinExtentionMe = skinTypeMe === 0 ? "webp" : "gif";
+                skinURL = "image/tractor/skin/".concat(skinInUseMe, ".").concat(skinExtentionMe);
+            }
             this.SetAvatarImage(false, this.gameScene, 0, skinTypeMe, skinURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
         }
     };
@@ -2551,10 +2862,20 @@ var MainForm = /** @class */ (function () {
     MainForm.prototype.CreatePlayer = function (pos, playerId, parentNode) {
         var playerDiv = this.gameScene.ui.create.player(parentNode);
         playerDiv.setAttribute('data-position', pos);
+        // 彻底禁用动画，防止头像“从左侧飞入”
+        playerDiv.style.transition = "none";
         playerDiv.node.avatar.style['background-size'] = '100% 100%';
         playerDiv.node.avatar.style['background-repeat'] = 'no-repeat';
         playerDiv.node.avatar.show();
         playerDiv.node.nameol.innerHTML = this.gameScene.hidePlayerID ? "" : playerId;
+        // 核心增强：统一全游戏的玩家 ID 样式 (底部对齐 + 描边阴影)
+        playerDiv.node.nameol.style.color = "white";
+        playerDiv.node.nameol.style.textShadow = "1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black";
+        playerDiv.node.nameol.style.bottom = "0px";
+        playerDiv.node.nameol.style.position = "absolute";
+        playerDiv.node.nameol.style.width = "100%";
+        playerDiv.node.nameol.style.textAlign = "center";
+        playerDiv.node.nameol.style.pointerEvents = "none";
         return playerDiv;
     };
     MainForm.prototype.EnableShortcutKeys = function () {
@@ -2679,45 +3000,49 @@ var MainForm = /** @class */ (function () {
         return daojuInfoByPlayer && daojuInfoByPlayer.isRenewed;
     };
     MainForm.prototype.SetAvatarImage = function (isPreview, gs, pos, skinType, skinURL, playerObj, fixedHeight, callback, p) {
+        var isExternal = skinURL.startsWith("URL:") || skinURL.includes("http");
+        var actualURL = isExternal ? (skinURL.startsWith("URL:") ? skinURL.substring(4) : skinURL) : skinURL;
+        
         var img = new Image();
         img.onload = function (e) {
             var wid = e.target.width;
             var hei = e.target.height;
-            var skinWid = fixedHeight * wid / hei;
-            playerObj.style.width = "calc(".concat(skinWid, "px)");
-            if (!isPreview && gs.noDongtu.toLowerCase() === "true" && skinType === 1) {
-                // clean up animation elements first
-                jQuery(playerObj.node.avatar).css("background-image", "");
-                if (playerObj.node.avatarImg) {
-                    playerObj.node.avatarImg.remove();
-                    delete playerObj.node.avatarImg;
-                }
-                var canvas = document.createElement('canvas');
-                canvas.width = skinWid;
-                canvas.height = fixedHeight;
-                canvas.getContext('2d').drawImage(img, 0, 0, skinWid, fixedHeight);
-                canvas.style.width = '100%';
-                canvas.style.height = '100%';
-                canvas.style['border-radius'] = '8px';
-                playerObj.appendChild(canvas);
-                playerObj.node.avatarImg = canvas;
+            var ratio = wid / hei;
+            
+            var finalWid, finalHei;
+            if (ratio > 1) { // 横向
+                finalWid = fixedHeight;
+                finalHei = fixedHeight / ratio;
+            } else { // 纵向
+                finalHei = fixedHeight;
+                finalWid = fixedHeight * ratio;
             }
-            else {
-                // clean up static elements first
-                if (playerObj.node.avatarImg) {
-                    playerObj.node.avatarImg.remove();
-                    delete playerObj.node.avatarImg;
-                }
-                // build animation
-                playerObj.node.avatar.setBackgroundImage(skinURL);
+
+            playerObj.style.width = "".concat(finalWid, "px");
+            playerObj.style.height = "".concat(finalHei, "px");
+            
+            playerObj.node.avatar.style.backgroundColor = "transparent";
+            if (isExternal) {
+                // 直接操作 style 绕过框架补全，彻底修复“一开始加载不出图片”的问题
+                playerObj.node.avatar.style.backgroundImage = "url('".concat(actualURL, "')");
+                playerObj.node.avatar.style.backgroundSize = "contain";
+                playerObj.node.avatar.style.backgroundPosition = "center";
+            } else {
+                playerObj.node.avatar.setBackgroundImage(actualURL);
+                playerObj.node.avatar.style.backgroundSize = "100% 100%";
             }
+
             if (gs && gs.ui.handZone && playerObj === gs.ui.gameMe) {
-                gs.ui.handZone.style.left = "calc(".concat(gs.ui.gameMe.clientWidth, "px)");
+                gs.ui.handZone.style.left = "calc(".concat(playerObj.clientWidth, "px)");
             }
             if (callback) {
-                callback(p, pos, gs, skinWid);
+                callback(p, pos, gs, finalWid, finalHei);
             }
         };
+        if (isExternal) {
+            img.src = actualURL;
+            return;
+        }
         var skinPath = "image/tractor/skin/";
         var skinKey = skinURL.substring(skinPath.length);
         if (gs.ui.avatarResources[skinKey]) {
@@ -2729,41 +3054,31 @@ var MainForm = /** @class */ (function () {
     };
     MainForm.prototype.UpdateSkinStatus = function () {
         if (this.gameScene.isInGameHall()) {
-            var daojuInfoByPlayer = this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.PlayerId];
-            var pMe = CommonMethods.GetPlayerByID(this.tractorPlayer.CurrentGameState.Players, this.tractorPlayer.PlayerId);
-            if (daojuInfoByPlayer) {
-                var ownedSkinInfoList = daojuInfoByPlayer.ownedSkinInfo;
-                if (ownedSkinInfoList && ownedSkinInfoList.includes(this.gameScene.skinInUse)) {
-                    var skinType = this.GetSkinType(this.gameScene.skinInUse);
-                    var skinExtention = skinType === 0 ? "webp" : "gif";
-                    var skinURL = "image/tractor/skin/".concat(this.gameScene.skinInUse, ".").concat(skinExtention);
-                    if (this.gameScene.isInGameRoom()) {
-                        this.SetAvatarImage(false, this.gameScene, 0, skinType, skinURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight, this.SetObText, pMe);
-                    }
-                    else {
-                        this.SetAvatarImage(false, this.gameScene, 0, skinType, skinURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
-                    }
-                }
+            var myId = this.tractorPlayer.MyOwnId;
+            var daojuInfoByPlayer = this.DaojuInfo.daojuInfoByPlayer[myId];
+            if (!daojuInfoByPlayer) return;
+
+            // 1. 获取服务器记录的正式皮肤
+            var skinInUse = daojuInfoByPlayer.skinInUse || CommonMethods.defaultSkinInUse;
+            var skinType = this.GetSkinType(skinInUse);
+            var skinURL = "";
+            if (skinInUse.startsWith("URL:")) {
+                skinURL = skinInUse;
+            } else {
+                var skinExtention = skinType === 0 ? "webp" : "gif";
+                skinURL = "image/tractor/skin/".concat(skinInUse, ".").concat(skinExtention);
             }
-            return;
+
+            // 2. 复原大厅主视角头像
+            if (this.gameScene.ui.gameMe) {
+                this.SetAvatarImage(false, this.gameScene, 0, skinType, skinURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
+            }
         }
-        // 如果在房间里，则实时更新其它玩家的皮肤
+
+        // 核心修复：如果在房间里，直接复用全场重绘逻辑
+        // 这样能确保视角锁定、空位椅子渲染、观察者列表全部按照最新 GameState 完美还原，解决视角跳转和问号头像问题
         if (this.gameScene.isInGameRoom()) {
-            this.destroyPokerPlayerObGameRoom();
-            var curIndex = CommonMethods.GetPlayerIndexByID(this.tractorPlayer.CurrentGameState.Players, this.tractorPlayer.PlayerId);
-            for (var i = 0; i < 4; i++) {
-                var p = this.tractorPlayer.CurrentGameState.Players[curIndex];
-                if (p) {
-                    var playerImage = i === 0 ? this.gameScene.ui.gameMe : this.gameScene.ui.gameRoomImagesChairOrPlayer[i];
-                    //skin
-                    var skinInUse = this.DaojuInfo.daojuInfoByPlayer[p.PlayerId] ? this.DaojuInfo.daojuInfoByPlayer[p.PlayerId].skinInUse : CommonMethods.defaultSkinInUse;
-                    var skinType = this.GetSkinType(skinInUse);
-                    var skinExtention = skinType === 0 ? "webp" : "gif";
-                    var skinURL = "image/tractor/skin/".concat(skinInUse, ".").concat(skinExtention);
-                    this.SetAvatarImage(false, this.gameScene, i, skinType, skinURL, playerImage, this.gameScene.coordinates.cardHeight, this.SetObText, p);
-                }
-                curIndex = (curIndex + 1) % 4;
-            }
+            this.NewPlayerJoined(true, false);
         }
     };
     MainForm.prototype.NotifyEmojiEventHandler = function (playerID, emojiType, emojiIndex, isCenter, msgString, noSpeaker) {
@@ -2853,9 +3168,11 @@ var MainForm = /** @class */ (function () {
                 d.style.display = 'block';
                 var pid = playersInGameHall[i];
                 var noChat = this.isChatBanned(pid) ? "-禁言中" : "";
-                var clientVersion = this.DaojuInfo.daojuInfoByPlayer[pid].clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb ? "-怀旧版" : "";
+                var pInfo = this.DaojuInfo && this.DaojuInfo.daojuInfoByPlayer && this.DaojuInfo.daojuInfoByPlayer[pid];
+                var clientVersion = (pInfo && pInfo.clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb) ? "-怀旧版" : "";
                 var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion);
-                d.innerText = "\u3010".concat(pidInfo, "\u3011\u5347\u5E01\uFF1A").concat(this.DaojuInfo.daojuInfoByPlayer[pid].Shengbi);
+                var pRank = pInfo ? pInfo.Rank : "初出江湖";
+                d.innerText = "\u3010".concat(pidInfo, "\u3011\u7B49\u7EA7\uFF1A").concat(pRank);
                 this.gameScene.ui.divOnlinePlayerList.appendChild(d);
             }
         }
@@ -2876,10 +3193,12 @@ var MainForm = /** @class */ (function () {
                 d.style.display = 'block';
                 var pid = players[i];
                 var noChat = this.isChatBanned(pid) ? "-禁言中" : "";
-                var clientVersion = this.DaojuInfo.daojuInfoByPlayer[pid].clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb ? "-怀旧版" : "";
+                var pInfo = this.DaojuInfo && this.DaojuInfo.daojuInfoByPlayer && this.DaojuInfo.daojuInfoByPlayer[pid];
+                var clientVersion = (pInfo && pInfo.clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb) ? "-怀旧版" : "";
                 var isOfflineInfo = (pid in playerIsOffline) ? "-离线中" : "";
                 var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion).concat(isOfflineInfo);
-                d.innerText = "\u3010".concat(pidInfo, "\u3011\u5347\u5E01\uFF1A").concat(this.DaojuInfo.daojuInfoByPlayer[pid].Shengbi);
+                var pRank = pInfo ? pInfo.Rank : "初出茅庐";
+                d.innerText = "\u3010".concat(pidInfo, "\u3011\u7B49\u7EA7\uFF1A").concat(pRank);
                 this.gameScene.ui.divOnlinePlayerList.appendChild(d);
             }
             if (obs && obs.length > 0) {
@@ -2893,9 +3212,11 @@ var MainForm = /** @class */ (function () {
                     d.style.display = 'block';
                     var pid = obs[i];
                     var noChat = this.isChatBanned(pid) ? "-禁言中" : "";
-                    var clientVersion = this.DaojuInfo.daojuInfoByPlayer[pid].clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb ? "-怀旧版" : "";
+                    var pInfo = this.DaojuInfo && this.DaojuInfo.daojuInfoByPlayer && this.DaojuInfo.daojuInfoByPlayer[pid];
+                    var clientVersion = (pInfo && pInfo.clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb) ? "-怀旧版" : "";
                     var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion);
-                    d.innerText = "\u3010".concat(pidInfo, "\u3011\u5347\u5E01\uFF1A").concat(this.DaojuInfo.daojuInfoByPlayer[pid].Shengbi);
+                    var pRank = pInfo ? pInfo.Rank : "初出茅庐";
+                    d.innerText = "\u3010".concat(pidInfo, "\u3011\u7B49\u7EA7\uFF1A").concat(pRank);
                     this.gameScene.ui.divOnlinePlayerList.appendChild(d);
                 }
             }

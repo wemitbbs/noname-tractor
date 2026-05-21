@@ -6,7 +6,8 @@ game.import('mode', function (lib, game, ui, get, ai, _status) {
 			"step 0"
 			lib.config.mode_config['identity']['double_character'] = true;
 			lib.config.mode_config['identity']['connect_double_character'] = true;
-			game.showChangeLog();
+			// 核心修复：同步版本号以确保 createNode 正常运行
+			lib.config.version = lib.version;
 			"step 1"
 			var directstartmode = lib.config.directstartmode;
 			ui.create.menu(true);
@@ -25,6 +26,47 @@ game.import('mode', function (lib, game, ui, get, ai, _status) {
 			ui.avatarResources = {};
 			ui.fullSkinInfoResources = {};
 			ui.criticalResourceLoaded = false;
+
+			var connect = function (e) {
+				// 即使按钮被禁用，自动登录也可以触发
+				loadAudioPool();
+
+				clearTimeout(event.timeout);
+				game.clearConnect();
+
+				var textEmail = ui.create.div('', '正在通过论坛账号自动登录...');
+				textEmail.style.width = '400px';
+				textEmail.style.height = '30px';
+				textEmail.style.lineHeight = '30px';
+				textEmail.style.fontFamily = 'xinwei';
+				textEmail.style.fontSize = '30px';
+				textEmail.style.padding = '10px';
+				textEmail.style.left = 'calc(50% - 200px)';
+				textEmail.style.top = 'calc(50%)';
+				textEmail.style.textAlign = 'center';
+				ui.window.appendChild(textEmail);
+				ui.emailtext = textEmail;
+
+				import('../game/tractor/out/game_scene.js')
+					.then((GameScene) => {
+						sessionStorage.removeItem('isManualLogout');
+						var gameScene = new GameScene.GameScene(false, window.location.hostname + ":8081", "", "", "", game, lib, ui, get, _status);
+					})					.catch(error => {
+						document.body.innerHTML = `<div>!!! 尝试加载页面失败！</div>`
+						console.log(error);
+					});
+
+				if (e && e.preventDefault) e.preventDefault();
+			};
+
+			var updateButtonStatus = function () {
+				if (ui.criticalResourceLoaded) {
+					// 资源加载完成，恢复按钮为可点击状态
+					if (ui.ipbutton) {
+						ui.ipbutton.classList.remove('disabled');
+					}
+				}
+			}
 
 			ui.audioResources = {
 				"liangpai_m_shelie1": ["effect", "liangpai_m_shelie1"],
@@ -309,97 +351,27 @@ game.import('mode', function (lib, game, ui, get, ai, _status) {
 				}
 				event.created = true;
 
-				// 访问密钥
+				// 自动登录集成：创建必要的节点并强制隐藏
 				var nodeHostName = document.createElement("INPUT");
-				nodeHostName.value = lib.config.last_ip || "";
-				nodeHostName.classList.add('tractor-connect-input');
+				nodeHostName.value = window.location.hostname + ":8081";
 				nodeHostName.style.display = 'none';
-				nodeHostName.style.top = 'calc(16%)';
-				nodeHostName.setAttribute("type", "text");
-				nodeHostName.setAttribute("placeholder", "访问密钥");
 				ui.window.appendChild(nodeHostName);
 				ui.ipnode = nodeHostName;
 
 				var nodeEmail = document.createElement("INPUT");
-				nodeEmail.value = "";
-				nodeEmail.classList.add('tractor-connect-input');
 				nodeEmail.style.display = 'none';
-				nodeEmail.style.top = 'calc(26%)';
-				nodeEmail.setAttribute("type", "text");
-				nodeEmail.setAttribute("placeholder", "邮箱");
 				ui.window.appendChild(nodeEmail);
 				ui.emailnode = nodeEmail;
 
-				// 用户名
 				var nodePlayerName = document.createElement("INPUT");
-				nodePlayerName.value = lib.config.last_player_name || "";
-				nodePlayerName.classList.add('tractor-connect-input');
-				nodePlayerName.style.top = 'calc(36%)';
-				nodePlayerName.setAttribute("type", "text");
-				nodePlayerName.setAttribute("maxlength", "10");
-				nodePlayerName.setAttribute("placeholder", "用户名-不超过10个字符");
-				nodePlayerName.contentEditable = true;
+				nodePlayerName.style.display = 'none';
 				ui.window.appendChild(nodePlayerName);
 				ui.playernamenode = nodePlayerName;
 
-
-				// 密码
 				var nodePassword = document.createElement("INPUT");
-				nodePassword.value = lib.config.NickNameOverridePass || lib.config.last_password || "";
-				nodePassword.classList.add('tractor-connect-input');
-				nodePassword.style.top = 'calc(46%)';
-				nodePassword.setAttribute("type", "password");
-				nodePassword.setAttribute("placeholder", "密码");
+				nodePassword.style.display = 'none';
 				ui.window.appendChild(nodePassword);
 				ui.passwordnode = nodePassword;
-
-				var connect = function (e) {
-					if (document.getElementById("btnEnterHall").classList.contains('disabled')) return;
-					loadAudioPool();
-
-					var isEnterHallDisabled = ui.ipbutton.classList.contains('disabled');
-					var isEnterHall = e.target.innerText === '进入大厅';
-					var isDoReplay = e.target.innerText === '录像回放';
-					var isRegister = e.target.innerText === '注册用户';
-					if (isEnterHall && isEnterHallDisabled) return;
-
-					clearTimeout(event.timeout);
-					game.clearConnect();
-
-					if (isEnterHall) {
-						var textEmail = ui.create.div('', '连接中...');
-						textEmail.style.width = '400px';
-						textEmail.style.height = '30px';
-						textEmail.style.lineHeight = '30px';
-						textEmail.style.fontFamily = 'xinwei';
-						textEmail.style.fontSize = '30px';
-						textEmail.style.padding = '10px';
-						textEmail.style.left = 'calc(50% - 200px)';
-						textEmail.style.top = 'calc(56%)';
-						textEmail.style.textAlign = 'center';
-						ui.window.appendChild(textEmail);
-						ui.emailtext = textEmail;
-					}
-
-					import('../game/tractor/out/game_scene.js')
-						.then((GameScene) => {
-							var gameScene = new GameScene.GameScene(isDoReplay, nodeHostName.value.trim(), nodePlayerName.value.trim(), nodePassword.value.trim(), nodeEmail.value.trim(), game, lib, ui, get, _status);
-						})
-						.catch(error => {
-							document.body.innerHTML = `<div>!!! 尝试加载页面失败！</div>`
-							console.log(error);
-						});
-
-					if (e) e.preventDefault();
-					if (!isDoReplay) {
-						game.saveConfig('last_ip', nodeHostName.value.trim());
-						game.saveConfig('last_player_name', nodePlayerName.value.trim());
-						if (!isRegister) {
-							game.saveConfig('last_password', nodePassword.value.trim());
-						}
-						game.saveConfig('last_email', nodeEmail.value.trim());
-					}
-				};
 
 				var button = ui.create.div('.menubutton.highlight.large.disabled', '进入大厅', connect);
 				button.id = "btnEnterHall";
@@ -408,267 +380,28 @@ game.import('mode', function (lib, game, ui, get, ai, _status) {
 				ui.window.appendChild(button);
 				ui.ipbutton = button;
 
-				// var buttonReplay = ui.create.div('.menubutton.highlight.large.pointerdiv', '录像回放', connect);
-				// buttonReplay.style.left = 'calc(50% - 70px)';
-				// buttonReplay.style.top = 'calc(64%)';
-				// ui.window.appendChild(buttonReplay);
-				// ui.buttonReplay = buttonReplay;
-
-				// user choices
-				var userChoices = ui.create.div(".userChoices", ui.window);
-				userChoices.innerHTML = `<a href="javascript:void(0)" id="loginLink">返回首页</a>
-											<a href="javascript:void(0)" id="registerLink">注册用户</a>
-											<a href="javascript:void(0)" id="findPasswordLink">找回密码</a>
-											<a href="javascript:void(0)" id="findUsernameLink">找回用户名</a>
-											<a href="javascript:void(0)" id="doReplayLink">录像回放</a>
-											<a href="javascript:void(0)" id="inputAccessKeyLink">旧版</a>`;
-				userChoices.style.fontSize = '20px';
-				userChoices.style.padding = '10px';
-				userChoices.style.width = 'calc(100%)';
-				userChoices.style.top = 'calc(64%)';
-				userChoices.style.textAlign = 'center';
-				ui.userChoices = userChoices;
-				const links = document.querySelectorAll('.userChoices a');
-				links.forEach(link => {
-					link.style.color = "white";
-				});
-
-				document.getElementById("loginLink").style.display = 'none';
-
-				var specialLinks = ["registerLink", "findPasswordLink", "findUsernameLink"];
-				toggleButton = function (eleID) {
-					if (specialLinks.includes(eleID)) {
-						const links = document.querySelectorAll('.userChoices a');
-						links.forEach(link => {
-							link.style.display = 'none';
-						});
-						document.getElementById("loginLink").style.display = 'inline-block';
-					} else if (eleID == "loginLink") {
-						const links = document.querySelectorAll('.userChoices a');
-						links.forEach(link => {
-							link.style.display = 'inline-block';
-						});
-						document.getElementById("loginLink").style.display = 'none';
-					}
-				}
-
-				displayButton = function (event) {
-					nodePassword.setAttribute("placeholder", "密码");
-					const id = event.target.id;
-					toggleButton(id);
-					switch (id) {
-						case 'loginLink':
-							nodePlayerName.style.display = 'inline-block';
-							nodePlayerName.value = lib.config.last_player_name || "";
-							nodePassword.style.display = 'inline-block';
-							nodePassword.value = lib.config.NickNameOverridePass || lib.config.last_password || "";
-							nodeEmail.style.display = 'none';
-							nodeEmail.value = '';
-							button.innerHTML = "进入大厅";
-							break;
-						case 'registerLink':
-							nodePlayerName.style.display = 'inline-block';
-							nodePlayerName.value = '';
-							nodePassword.style.display = 'inline-block';
-							nodePassword.value = '';
-							nodePassword.setAttribute("placeholder", "邀请码");
-							nodeEmail.style.display = 'inline-block';
-							nodeEmail.value = '';
-							button.innerHTML = "注册用户";
-							break;
-						case 'findPasswordLink':
-							nodePlayerName.style.display = 'inline-block';
-							nodePlayerName.value = lib.config.last_player_name || "";
-							nodePassword.style.display = 'none';
-							nodePassword.value = '';
-							nodeEmail.style.display = 'inline-block';
-							nodeEmail.value = '';
-							button.innerHTML = "找回密码";
-							break;
-						case 'findUsernameLink':
-							nodePlayerName.style.display = 'none';
-							nodePlayerName.value = '';
-							nodePassword.style.display = 'none';
-							nodePassword.value = '';
-							nodeEmail.style.display = 'inline-block';
-							nodeEmail.value = '';
-							button.innerHTML = "找回用户名";
-							break;
-						case 'inputAccessKeyLink':
-							if (nodeHostName.style.display === 'none') {
-								nodeHostName.style.display = 'inline-block';
-								nodeHostName.value = lib.config.last_ip || "";
-							} else {
-								nodeHostName.style.display = 'none';
-							}
-							break;
-						default:
-							console.log('Unknown link clicked');
-					}
-					updateButtonStatus();
-				}
-
-				document.getElementById("loginLink").addEventListener('click', displayButton);
-				document.getElementById("registerLink").addEventListener('click', displayButton);
-				document.getElementById("findPasswordLink").addEventListener('click', displayButton);
-				document.getElementById("findUsernameLink").addEventListener('click', displayButton);
-				document.getElementById("doReplayLink").addEventListener('click', connect);
-				document.getElementById("inputAccessKeyLink").addEventListener('click', displayButton);
-
-				updateButtonStatus = function () {
-					if (!ui.criticalResourceLoaded) {
-						button.classList.add('disabled');
-						button.classList.remove('pointerdiv');
-						return;
-					}
-					switch (button.innerHTML) {
-						case '进入大厅':
-							if (!nodePlayerName.value || !nodePassword.value) {
-								button.classList.add('disabled');
-								button.classList.remove('pointerdiv');
-							} else {
-								button.classList.remove('disabled');
-								button.classList.add('pointerdiv');
-							}
-							break;
-						case '注册用户':
-							if (!nodePlayerName.value || !nodePassword.value || !nodeEmail.value) {
-								button.classList.add('disabled');
-								button.classList.remove('pointerdiv');
-							} else {
-								button.classList.remove('disabled');
-								button.classList.add('pointerdiv');
-							}
-							break;
-						case '找回密码':
-							if (!nodePlayerName.value || !nodeEmail.value) {
-								button.classList.add('disabled');
-								button.classList.remove('pointerdiv');
-							} else {
-								button.classList.remove('disabled');
-								button.classList.add('pointerdiv');
-							}
-							break;
-						case '找回用户名':
-							if (!nodeEmail.value) {
-								button.classList.add('disabled');
-								button.classList.remove('pointerdiv');
-							} else {
-								button.classList.remove('disabled');
-								button.classList.add('pointerdiv');
-							}
-							break;
-						default:
-							break;
+				var updateButtonStatus = function () {
+					if (ui.criticalResourceLoaded && ui.ipbutton) {
+						ui.ipbutton.classList.remove('disabled');
 					}
 				}
 				updateButtonStatus();
 
-				nodeHostName.addEventListener('keyup', function (e) {
-					updateButtonStatus();
-					if (e.keyCode == 13) {
-						connect(e);
-					}
-				});
-				nodePlayerName.addEventListener('keyup', function (e) {
-					updateButtonStatus();
-					if (e.keyCode == 13) {
-						connect(e);
-					}
-				});
-				nodePassword.addEventListener('keyup', function (e) {
-					updateButtonStatus();
-					if (e.keyCode == 13) {
-						connect(e);
-					}
-				});
-				nodeEmail.addEventListener('keyup', function (e) {
-					updateButtonStatus();
-					if (e.keyCode == 13) {
-						connect(e);
-					}
-				});
+				var welcomeText = ui.create.div('.friendWebsites', "欢迎来到 WeMitBBS 双升游戏！", ui.window);
+				welcomeText.style.fontSize = '32px';
+				welcomeText.style.fontFamily = 'xinwei';
+				welcomeText.style.color = 'white';
+				welcomeText.style.padding = '20px';
+				welcomeText.style.width = 'calc(100%)';
+				welcomeText.style.top = 'calc(50% - 100px)';
+				welcomeText.style.textAlign = 'center';
+				welcomeText.style.textShadow = '2px 2px 4px black';
+				ui.userNotes = welcomeText;
 
-				// user notes
-				var userNotes = ui.create.div(".friendWebsites", ui.window);
-				userNotes.innerHTML = `欢迎来到西村升级小馆！<br/>注册新用户需要先从
-				<a href="javascript:void(0)" class="popup-link" id="toptopicinvite_newmitbbs" data-address="https://newmitbbs.com/viewtopic.php?t=825158">新未名空间邀请贴<span class="popup-icon">🔗</span></a>
-				联系楼主获取一个邀请码`;
-				userNotes.style.fontSize = '20px';
-				userNotes.style.padding = '10px';
-				userNotes.style.width = 'calc(100%)';
-				userNotes.style.top = 'calc(72%)';
-				userNotes.style.textAlign = 'center';
-				ui.userNotes = userNotes;
-
-				// friend websites
-				var friendWebsites = ui.create.div(".friendWebsites", ui.window);
-				friendWebsites.innerHTML = `友站链接：
-				<a href="javascript:void(0)" class="popup-link" id="friendWebsites_newmitbbs" data-address="https://newmitbbs.com">新未名空间<span class="popup-icon">🔗</span></a>
-				<a href="javascript:void(0)" class="popup-link" id="friendWebsites_freeblueplanet" data-address="https://www.freeblueplanet.com">自由蓝星<span class="popup-icon">🔗</span></a>
-				`;
-				friendWebsites.style.fontSize = '16px';
-				friendWebsites.style.padding = '10px';
-				friendWebsites.style.width = 'calc(100%)';
-				friendWebsites.style.top = 'calc(80%)';
-				friendWebsites.style.textAlign = 'center';
-				ui.friendWebsites = friendWebsites;
-				let friendWebsitesLinks = document.querySelectorAll('.friendWebsites a');
-				friendWebsitesLinks.forEach(link => {
-					link.style.color = "white";
-				});
-
-				document.querySelectorAll('.popup-link').forEach(link => {
-					link.addEventListener('click', function (event) {
-						event.preventDefault();
-						const address = this.dataset.address;
-						window.open(address, '_blank');
-					});
-				});
-
-				// var nodeUserManualLink = document.getElementById("userManualLink");
-				// nodeUserManualLink.addEventListener('click', function (e) {
-				// 	window.open("https://docs.google.com/document/d/12rgDuEzwhc8OZXU5Whygjwnqqz4xacm0BCqrLF5AsGY/edit?usp=sharing");
-				// });
-
-				// ui.hall_button=ui.create.system('联机大厅',function(){
-				// 	node.innerHTML=get.config('hall_ip')||lib.hallURL;
-				// 	connect();
-				// },true);
-				// if(!get.config('hall_button')){
-				// 	ui.hall_button.style.display='none';
-				// }
-				// ui.recentIP=ui.create.system('最近连接',null,true);
-				// var clickLink=function(){
-				// 	node.innerHTML=this.innerHTML;
-				// 	connect();
-				// };
-				// lib.setPopped(ui.recentIP,function(){
-				// 	if(!lib.config.recentIP.length) return;
-				// 	var uiintro=ui.create.dialog('hidden');
-				// 	uiintro.listen(function(e){
-				// 		e.stopPropagation();
-				// 	});
-				// 	var list=ui.create.div('.caption');
-				// 	for(var i=0;i<lib.config.recentIP.length;i++){
-				// 		ui.create.div('.text.textlink',list,clickLink).innerHTML=get.trimip(lib.config.recentIP[i]);
-				// 	}
-				// 	uiintro.add(list);
-				// 	var clear=uiintro.add('<div class="text center">清除</div>');
-				// 	clear.style.paddingTop=0;
-				// 	clear.style.paddingBottom='3px';
-				// 	clear.listen(function(){
-				// 		lib.config.recentIP.length=0;
-				// 		game.saveConfig('recentIP',[]);
-				// 		uiintro.delete();
-				// 	});
-				// 	return uiintro;
-				// },220);
 				lib.init.onfree();
-			}
+				}
 
-			if (window.isNonameServer) {
-				game.connect(window.isNonameServerIp || 'localhost');
+				if (window.isNonameServer) {				game.connect(window.isNonameServerIp || 'localhost');
 			}
 			else if (lib.config.reconnect_info) {
 				// var info = lib.config.reconnect_info;

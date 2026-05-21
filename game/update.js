@@ -1,8 +1,8 @@
 window.noname_update = {
-	version: '2026.04.19',
-	update: '2020.11.06.2',
+	version: '1.0.0-alpha ',
+	update: '2026.05.20.2',
 	changeLog: [
-		'取消聊天功能',
+		'房主可以一键添加bot',
 	],
 	files: []
 };

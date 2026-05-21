@@ -28,9 +28,6 @@ var DrawingFormHelper = /** @class */ (function () {
     // drawing cards without any tilt
     DrawingFormHelper.prototype.ResortMyHandCards = function (destroy) {
         this.skipCheckCardImages = false;
-        if (this.mainForm.tractorPlayer.CurrentPoker.Count() === TractorRules.GetCardNumberofEachPlayer(this.mainForm.tractorPlayer.CurrentGameState.Players.length) + 8) {
-            this.skipCheckCardImages = true;
-        }
         this.mainForm.myCardIsReady = Array(33).fill(false);
         if (destroy) {
             this.destroyAllCards();
@@ -976,12 +973,17 @@ var DrawingFormHelper = /** @class */ (function () {
     };
     // drawing showed cards
     DrawingFormHelper.prototype.DrawShowedCardsByPosition = function (cards, pos) {
-        var x = this.mainForm.gameScene.coordinates.showedCardsPositions[pos - 1].x;
-        var y = this.mainForm.gameScene.coordinates.showedCardsPositions[pos - 1].y;
+        if (!pos || pos < 1 || pos > 4) return;
+        var positions = this.mainForm.gameScene.coordinates.showedCardsPositions;
+        if (!positions || !positions[pos - 1]) return;
+        
+        var x = positions[pos - 1].x;
+        var y = positions[pos - 1].y;
         this.DrawShowedCards(cards, x, y, this.mainForm.gameScene.showedCardImages, 1, pos);
     };
     // drawing TrumpMade cards from last trick
     DrawingFormHelper.prototype.DrawTrumpMadeCardsByPositionFromLastTrick = function (cards, pos) {
+        if (!pos || !this.mainForm.gameScene.coordinates.trumpMadeCardsPositions[pos - 1]) return;
         var x = this.mainForm.gameScene.coordinates.trumpMadeCardsPositions[pos - 1].x;
         var y = this.mainForm.gameScene.coordinates.trumpMadeCardsPositions[pos - 1].y;
         this.DrawShowedCards(cards, x, y, this.mainForm.gameScene.showedCardImages, this.mainForm.gameScene.coordinates.trumpMadeCardsScale, pos === 3 ? 7 : pos, true);

@@ -42,7 +42,7 @@
         <h2>房间设置</h2>
         <div id="divRoomSettings" style="display: none;">
             <!-- 房主专有设置：仅为房主时才可见 -->
-            <p><input type="button" id="btnResumeGame" value="继续上盘牌局" /></p>
+            <p><input type="button" id="btnResumeGame" value="继续上盘牌局" disabled/></p>
             <p><input type="button" id="btnRandomSeat" value="随机组队" /></p>
             <p>
                 <select id="selectSwapSeat">
@@ -69,7 +69,7 @@
                 <option value="20">20秒</option>
                 <option value="30">30秒</option>
                 <option value="40">40秒</option>
-                <option value="50">60秒</option>
+                <option value="50">50秒</option>
                 <option value="60">60秒</option>
                 <option value="90">90秒</option>
             </select>
@@ -84,7 +84,7 @@
                 <option value="120">120秒</option>
             </select>
         </p>
-        <p>
+        <p style="pointer-events: none; opacity: 0.5;">
             <label for="selectStarter">谁坐庄</label>
             <select id="selectStarter" />
             <input type="button" id="btnStarter" value="确定" style="display: none;" />
@@ -130,7 +130,7 @@
         <p><input type="button" id="btnBecomeRoomOwner" value="成为房主" style="display: none;" /></p>
     </div>
     <h2>本地设置</h2>
-    <p id="pNoDongtu" style="display: none;">
+    <p id="pNoDongtu" style="pointer-events: none; opacity: 0.5;">
         <input type="checkbox" id="cbxNoDongtu" /><label for="cbxNoDongtu">关闭动图（免费开放，时效1天）</label>
         <br />
         <label id="lblNoDongtuUntilExpDate" style="display: none;" />
@@ -147,6 +147,7 @@
         <br />
         <label id="lblNoTouchDeviceDesc">不勾选此选项，并配合【开启拖拽选牌】选项方能在触屏设备上实现拖拽选牌功能</label>
     </p>
+    <div style="pointer-events: none; opacity: 0.5;">
     <p><input type="checkbox" id="cbxHidePlayerID" /><label for="cbxHidePlayerID">隐藏玩家ID（需重启游戏生效）</label></p>
     <p>
         当前录像个数：<span id="divReplayCount"></span><br />
@@ -156,6 +157,7 @@
     <p><input type="button" id="btnExportZipFile" value="导出所有录像至本地文件" /></p>
     <p><label for="inputRecordingFile">导入本地录像文件（仅支持zip/json格式）：</label></p>
     <p><input type="file" id="inputRecordingFile" accept=".zip,.json" /></p>
+    </div>
     <p><input type="button" id="btnCleanupLocalResources" value="清空缓存资源并刷新" /> <label
             for="btnCleanupLocalResources">包括卡牌资源、皮肤资源等</label></p>
 
@@ -229,10 +231,12 @@
         <li>拖拽鼠标：先择多张牌</li>
         <li>鼠标右键点击牌：向左选择多张合理的牌</li>
         <li>鼠标右键点击屏幕空白处：回看上轮出牌</li>
+        <div style="pointer-events: none; opacity: 0.5;">
         <li>录像回放，第一视角：0 键</li>
         <li>录像回放，第一轮：↑ 上箭头</li>
         <li>录像回放，上一轮：← 左箭头</li>
         <li>录像回放，下一轮：→ 右箭头</li>
         <li>录像回放，最末轮：↓ 下箭头</li>
+        </div>
     </ul>
 </div>

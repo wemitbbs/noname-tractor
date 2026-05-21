@@ -82,6 +82,11 @@ export var CommonMethods = /** @class */ (function () {
                 return i;
             }
         }
+        // 核心加固：支持通过 [空位 X] 定位索引
+        if (playerID && playerID.indexOf("[空位 ") !== -1) {
+            var idx = parseInt(playerID.replace("[空位 ", "").replace("]", "")) - 1;
+            if (!isNaN(idx)) return idx;
+        }
         return -1;
     };
     CommonMethods.GetPlayerByID = function (a, playerID) {
@@ -90,17 +95,28 @@ export var CommonMethods = /** @class */ (function () {
             var p = a[i];
             if (p != null && p.PlayerId == playerID) {
                 res = p;
+                break;
             }
+        }
+        if (!res && playerID && playerID.indexOf("[空位 ") !== -1) {
+            return { PlayerId: playerID, IsReadyToStart: false, Observers: [] };
         }
         return res;
     };
     CommonMethods.GetPlayerIndexByPos = function (a, playerID, pos) {
         var selfIndex = CommonMethods.GetPlayerIndexByID(a, playerID);
+        if (selfIndex === -1) selfIndex = 0;
         return (selfIndex + (pos - 1)) % 4;
     };
     CommonMethods.GetNextPlayerAfterThePlayer = function (a, playerId) {
         var thisPlayerIndex = CommonMethods.GetPlayerIndexByID(a, playerId);
-        return a[(thisPlayerIndex + 1) % 4];
+        if (thisPlayerIndex === -1) thisPlayerIndex = 0;
+        var nextIdx = (thisPlayerIndex + 1) % 4;
+        var nextP = a[nextIdx];
+        if (nextP == null) {
+            return { PlayerId: "[空位 " + (nextIdx + 1) + "]", IsReadyToStart: false, Observers: [] };
+        }
+        return nextP;
     };
     CommonMethods.BuildCardNumMap = function () {
         //based on front_end\src\assets\poker.png
@@ -621,7 +637,7 @@ export var CommonMethods = /** @class */ (function () {
         "烟花",
         "嗯，没错儿",
         "有劳点击“开始”继续游戏",
-        "有劳房主点击右上角“设置”，再点击“继续上盘牌局”",
+        "有劳房主暂停一下游戏",
         "不好意思，得撤了，最后一把咯",
         "谢谢大家",
         "拜拜",

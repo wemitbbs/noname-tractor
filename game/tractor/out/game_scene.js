@@ -81,7 +81,7 @@ var GameScene = /** @class */ (function () {
         }
         this.hostName = hostName.trim();
         if (!this.hostName) {
-            this.hostName = "xicuntractor.ddnsfree.com:889";
+            this.hostName = "localhost:8081";
         }
         this.hostNameOriginal = this.hostName;
         this.playerName = playerName.trim();
@@ -90,17 +90,19 @@ var GameScene = /** @class */ (function () {
             this.hostName = "";
             return;
         }
-        var isIPPort = IPPort.test(this.hostName);
+        var isIPPort = IPPort.test(this.hostName) || this.hostName.includes("localhost");
         if (isIPPort) {
-            this.wsprotocal = "ws";
+            this.wsprotocal = window.location.protocol === "https:" ? "wss" : "ws";
         }
         else {
-            if (!(/(^|\s)((https?:\/\/)?[\w-]+(\.[\w-]+)+\.?(:\d+)$)/gi.test(this.hostName)) && !this.processAuth()) {
+            if (!(/(^|\s)((https?:\/\/)?[\w-]+(\.[\w-]+)*\.?(:\d+)$)/gi.test(this.hostName)) && !this.processAuth()) {
                 document.body.innerHTML = "<div>!!! \u89E3\u6790\u670D\u52A1\u5668\u5730\u5740\u5931\u8D25\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(this.hostNameOriginal, "</div>");
                 this.hostName = "";
                 return;
             }
-            this.resolveUrl();
+            if (!this.hostName.includes("localhost")) {
+                this.resolveUrl();
+            }
         }
         this.nickNameOverridePass = nickNameOverridePass;
         this.playerEmail = playerEmail;
@@ -120,11 +122,9 @@ var GameScene = /** @class */ (function () {
             this.websocket = new WebSocket("".concat(this.wsprotocal, "://").concat(this.hostName));
             this.websocket.gs = this;
             this.websocket.onopen = function () {
-                // try {
-                console.log("连接成功");
-                if (this.gs.ui.emailtext) {
-                    this.gs.game.clearConnect();
-                }
+                // 核心修复：利用引擎标准方法清理 Splash 界面 (包含欢迎语和状态文本)
+                this.gs.game.clearConnect();
+
                 // empty password means recover password or playerName
                 if (!this.gs.nickNameOverridePass) {
                     this.gs.nickNameOverridePass = CommonMethods.recoverLoginPassFlag;
@@ -135,11 +135,9 @@ var GameScene = /** @class */ (function () {
                 var enterHallInfo = new EnterHallInfo(this.gs.nickNameOverridePass, this.gs.playerEmail, "".concat(CommonMethods.PLAYER_CLIENT_TYPE_TLJAPP).concat(CommonMethods.PLAYER_ENTER_HALL_DELIMITER).concat(this.gs.clientVersion));
                 this.gs.sendMessageToServer(CommonMethods.PLAYER_ENTER_HALL_REQUEST, this.gs.playerName, JSON.stringify(enterHallInfo));
                 this.gs.mainForm = new MainForm(this.gs);
-                this.gs.mainForm.drawFrameMain();
-                this.gs.mainForm.drawFrameChat();
                 CommonMethods.BuildCardNumMap();
                 IDBHelper.InitIDB(function () { void (0); });
-                this.gs.mainForm.LoadUIUponConnect();
+                // this.gs.mainForm.LoadUIUponConnect(); // 移除了此行的自动调用
                 // } catch (e) {
                 //     // alert("error")
                 //     document.body.innerHTML = `<div>!!! onopen Error: ${e}</div>`
@@ -241,7 +239,6 @@ var GameScene = /** @class */ (function () {
             };
             this.websocket.onclose = function (e) {
                 console.log("WS closed by the server. ", e.code, e.reason);
-                console.error(JSON.stringify(e));
             };
         }
         catch (e) {
