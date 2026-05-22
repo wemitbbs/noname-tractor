@@ -90,17 +90,17 @@ var GameScene = /** @class */ (function () {
             this.hostName = "";
             return;
         }
-        var isIPPort = IPPort.test(this.hostName) || this.hostName.includes("localhost");
+        var isIPPort = IPPort.test(this.hostName) || this.hostName.includes("localhost") || this.hostName.includes("/");
         if (isIPPort) {
             this.wsprotocal = window.location.protocol === "https:" ? "wss" : "ws";
         }
         else {
-            if (!(/(^|\s)((https?:\/\/)?[\w-]+(\.[\w-]+)*\.?(:\d+)$)/gi.test(this.hostName)) && !this.processAuth()) {
+            if (!(/(^|\s)((https?:\/\/)?[\w-]+(\.[\w-]+)*\.?(:\d+)?(\/.*)?$)/gi.test(this.hostName)) && !this.processAuth()) {
                 document.body.innerHTML = "<div>!!! \u89E3\u6790\u670D\u52A1\u5668\u5730\u5740\u5931\u8D25\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(this.hostNameOriginal, "</div>");
                 this.hostName = "";
                 return;
             }
-            if (!this.hostName.includes("localhost")) {
+            if (!this.hostName.includes("localhost") && this.hostName.includes(":")) {
                 this.resolveUrl();
             }
         }
@@ -112,7 +112,7 @@ var GameScene = /** @class */ (function () {
     }
     // non-replay mode, online
     GameScene.prototype.connect = function () {
-        if (!this.hostName)
+        if (!this.hostName || (this.websocket && this.websocket.readyState === WebSocket.CONNECTING))
             return;
         try {
             if (this.websocket) {
@@ -121,7 +121,17 @@ var GameScene = /** @class */ (function () {
             }
             this.websocket = new WebSocket("".concat(this.wsprotocal, "://").concat(this.hostName));
             this.websocket.gs = this;
+            var _this = this;
             this.websocket.onopen = function () {
+                // 核心修复：连接成功后，清理重连状态和 UI
+                if (_this.reconnectTimer) {
+                    clearInterval(_this.reconnectTimer);
+                    _this.reconnectTimer = null;
+                }
+                var overlay = document.getElementById('reconnect-overlay');
+                if (overlay) overlay.remove();
+                _this.reconnecting = false;
+
                 // 核心修复：利用引擎标准方法清理 Splash 界面 (包含欢迎语和状态文本)
                 this.gs.game.clearConnect();
 
@@ -134,17 +144,17 @@ var GameScene = /** @class */ (function () {
                 }
                 var enterHallInfo = new EnterHallInfo(this.gs.nickNameOverridePass, this.gs.playerEmail, "".concat(CommonMethods.PLAYER_CLIENT_TYPE_TLJAPP).concat(CommonMethods.PLAYER_ENTER_HALL_DELIMITER).concat(this.gs.clientVersion));
                 this.gs.sendMessageToServer(CommonMethods.PLAYER_ENTER_HALL_REQUEST, this.gs.playerName, JSON.stringify(enterHallInfo));
-                this.gs.mainForm = new MainForm(this.gs);
+                
+                // 如果是重连，不要重新创建 MainForm，否则会造成 UI 重叠和事件监听冲突
+                if (!this.gs.mainForm) {
+                    this.gs.mainForm = new MainForm(this.gs);
+                }
+                
                 CommonMethods.BuildCardNumMap();
                 IDBHelper.InitIDB(function () { void (0); });
-                // this.gs.mainForm.LoadUIUponConnect(); // 移除了此行的自动调用
-                // } catch (e) {
-                //     // alert("error")
-                //     document.body.innerHTML = `<div>!!! onopen Error: ${e}</div>`
-                // }
             };
             this.websocket.onmessage = function (message) {
-                // try {
+                // ... rest of onmessage ...
                 var data = JSON.parse(message.data);
                 var messageType = data["messageType"];
                 var playerID = data["playerID"];
@@ -207,44 +217,66 @@ var GameScene = /** @class */ (function () {
                     case CommonMethods.NotifyPing_RESPONSE:
                         this.gs.handleNotifyPing_RESPONSE();
                         break;
-                    // case CommonMethods.NotifySgcsPlayerUpdated_RESPONSE:
-                    //     this.gs.handleNotifySgcsPlayerUpdated_RESPONSE(objList);
-                    //     break;
-                    // case CommonMethods.NotifyCreateCollectStar_RESPONSE:
-                    //     this.gs.handleNotifyCreateCollectStar_RESPONSE(objList);
-                    //     break;
-                    // case CommonMethods.NotifyEndCollectStar_RESPONSE:
-                    //     this.gs.handleNotifyEndCollectStar(objList);
-                    //     break;
-                    // case CommonMethods.NotifyGrabStar_RESPONSE:
-                    //     this.gs.handleNotifyGrabStar_RESPONSE(objList);
-                    //     break;
                     case CommonMethods.NotifyDaojuInfo_RESPONSE:
                         this.gs.handleNotifyDaojuInfo(objList);
                         break;
-                    // case CommonMethods.NotifyUpdateGobang_RESPONSE:
-                    //     this.gs.handleNotifyUpdateGobang_RESPONSE(objList);
-                    //     break;
                     default:
                         break;
                 }
-                // } catch (e) {
-                //     // alert("error")
-                //     document.body.innerHTML = `<div>!!! onmessage Error: ${e}</div>`
-                // }
             };
             this.websocket.onerror = function (e) {
-                document.body.innerHTML = "<div>!!! \u5C1D\u8BD5\u4E0E\u670D\u52A1\u5668\u5EFA\u7ACB\u8FDE\u63A5\u5931\u8D25\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(this.gs.hostNameOriginal, "</div>");
-                console.error(JSON.stringify(e));
+                if (_this.reconnecting || _this.isKicked) return;
+                console.error("WS Error:", e);
+                _this.reconnect();
             };
             this.websocket.onclose = function (e) {
+                if (_this.reconnecting || _this.isKicked) return;
                 console.log("WS closed by the server. ", e.code, e.reason);
+                _this.reconnect();
             };
         }
         catch (e) {
-            document.body.innerHTML = "<div>!!! \u5C1D\u8BD5\u8FDE\u63A5\u670D\u52A1\u5668\u51FA\u9519\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(this.hostNameOriginal, "</div>");
-            console.log(e);
+            this.reconnect();
         }
+    };
+    GameScene.prototype.reconnect = function () {
+        var _this = this;
+        if (this.reconnectTimer) return;
+        this.reconnecting = true;
+        
+        // 核心修复：断线时立即清理所有 UI 倒计时，防止“灵异托管”
+        if (this.mainForm) {
+            this.mainForm.ClearTimer();
+            this.stopAudio(CommonMethods.audioCountdown8Sec);
+            // 隐藏所有座位的进度条
+            if (this.ui.gameRoomImagesChairOrPlayer) {
+                this.ui.gameRoomImagesChairOrPlayer.forEach(function (ui) { if (ui && ui.hideTimer) ui.hideTimer(); });
+            }
+        }
+
+        // 显示重连 UI
+        var overlay = document.getElementById('reconnect-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'reconnect-overlay';
+            overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0';
+            overlay.style.width = '100%'; overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
+            overlay.style.color = 'white'; overlay.style.display = 'flex';
+            overlay.style.flexDirection = 'column'; overlay.style.justifyContent = 'center';
+            overlay.style.alignItems = 'center'; overlay.style.zIndex = '100000';
+            overlay.style.fontFamily = 'xinwei, "Microsoft YaHei"';
+            overlay.innerHTML = '<h2 style="font-size:30px;margin-bottom:20px;">与服务器连接断开</h2>' +
+                                '<p style="font-size:18px;margin-bottom:30px;">正在尝试自动重连，请稍候...</p>' +
+                                '<div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;animation:spin 1s linear infinite;"></div>' +
+                                '<style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>';
+            document.body.appendChild(overlay);
+        }
+
+        this.reconnectTimer = setInterval(function () {
+            console.log("Attempting to reconnect...");
+            _this.connect();
+        }, 3000);
     };
     // replay mode, offline
     GameScene.prototype.doReplay = function () {

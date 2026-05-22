@@ -34,23 +34,27 @@ game.import('mode', function (lib, game, ui, get, ai, _status) {
 				clearTimeout(event.timeout);
 				game.clearConnect();
 
-				var textEmail = ui.create.div('', '正在通过论坛账号自动登录...');
-				textEmail.style.width = '400px';
-				textEmail.style.height = '30px';
-				textEmail.style.lineHeight = '30px';
-				textEmail.style.fontFamily = 'xinwei';
-				textEmail.style.fontSize = '30px';
-				textEmail.style.padding = '10px';
-				textEmail.style.left = 'calc(50% - 200px)';
-				textEmail.style.top = 'calc(50%)';
-				textEmail.style.textAlign = 'center';
-				ui.window.appendChild(textEmail);
-				ui.emailtext = textEmail;
+				var textLogin = ui.create.div('', '正在通过论坛账号自动登录...');
+				textLogin.style.width = '400px';
+				textLogin.style.height = '30px';
+				textLogin.style.lineHeight = '30px';
+				textLogin.style.fontFamily = 'xinwei';
+				textLogin.style.fontSize = '30px';
+				textLogin.style.padding = '10px';
+				textLogin.style.left = 'calc(50% - 200px)';
+				textLogin.style.top = 'calc(50%)';
+				textLogin.style.textAlign = 'center';
+				ui.window.appendChild(textLogin);
+				ui.emailtext = textLogin;
 
 				import('../game/tractor/out/game_scene.js')
 					.then((GameScene) => {
 						sessionStorage.removeItem('isManualLogout');
-						var gameScene = new GameScene.GameScene(false, window.location.hostname + ":8081", "", "", "", game, lib, ui, get, _status);
+						var serverAddr = window.location.hostname + ":8081";
+						if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+							serverAddr = window.location.host + "/tractor-server";
+						}
+						var gameScene = new GameScene.GameScene(false, serverAddr, "", "", "", game, lib, ui, get, _status);
 					})					.catch(error => {
 						document.body.innerHTML = `<div>!!! 尝试加载页面失败！</div>`
 						console.log(error);
@@ -353,7 +357,11 @@ game.import('mode', function (lib, game, ui, get, ai, _status) {
 
 				// 自动登录集成：创建必要的节点并强制隐藏
 				var nodeHostName = document.createElement("INPUT");
-				nodeHostName.value = window.location.hostname + ":8081";
+				var defaultAddr = window.location.hostname + ":8081";
+				if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+					defaultAddr = window.location.host + "/tractor-server";
+				}
+				nodeHostName.value = defaultAddr;
 				nodeHostName.style.display = 'none';
 				ui.window.appendChild(nodeHostName);
 				ui.ipnode = nodeHostName;

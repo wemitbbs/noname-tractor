@@ -1207,6 +1207,7 @@ var MainForm = /** @class */ (function () {
         }
     };
     MainForm.prototype.LoadUIUponConnect = function () {
+        if (this.gameScene.ui.exitTractor) return;
         var _this = this;
         if (!this.gameScene.isReplayMode) {
             this.gameScene.ui.btnQiandao = this.gameScene.ui.create.system('签到领福利', function () { _this.btnQiandao_Click(); }, true);
@@ -1647,6 +1648,16 @@ var MainForm = /** @class */ (function () {
                     adminOpt.value = "命令：刷新游戏设置";
                     adminOpt.text = "★ 管理员：刷新游戏设置";
                     selectPresetMsgs.appendChild(adminOpt);
+
+                    var adminOpt2 = document.createElement("option");
+                    adminOpt2.value = "命令：重载AI智脑";
+                    adminOpt2.text = "★ 管理员：重载AI智脑";
+                    selectPresetMsgs.appendChild(adminOpt2);
+
+                    var adminOpt3 = document.createElement("option");
+                    adminOpt3.value = "命令：清空无主房间";
+                    adminOpt3.text = "★ 管理员：清空无主房间";
+                    selectPresetMsgs.appendChild(adminOpt3);
                 }
             }
             this.gameScene.sendMessageToServer(ExitRoom_REQUEST, this.tractorPlayer.MyOwnId, "");
@@ -1657,21 +1668,6 @@ var MainForm = /** @class */ (function () {
         window.location.reload();
     };
 
-    MainForm.prototype.showOfflineScreen = function (msg) {
-        localStorage.removeItem('tractor_auto_sid');
-        sessionStorage.setItem('isManualLogout', 'true');
-        this.destroyGameRoom();
-        this.destroyGameHall();
-        if (this.gameScene.ui.frameMain) {
-            while (this.gameScene.ui.frameMain.firstChild) {
-                this.gameScene.ui.frameMain.removeChild(this.gameScene.ui.frameMain.firstChild);
-            }
-        }
-        this.tractorPlayer.NotifyMessage([msg]);
-        if (window.lib && window.lib.init && window.lib.init.onfree) {
-            window.lib.init.onfree();
-        }
-    };    
     MainForm.prototype.clearManualLogout = function() {
         sessionStorage.removeItem('isManualLogout');
     };
@@ -1683,6 +1679,7 @@ var MainForm = /** @class */ (function () {
     };
 
     MainForm.prototype.showOfflineScreen = function (msg) {
+        this.gameScene.isKicked = true; // 设置标记，防止触发自动重连逻辑
         localStorage.removeItem("tractor_auto_sid");
         sessionStorage.setItem("isManualLogout", "true");
         this.destroyGameRoom();
@@ -2226,6 +2223,7 @@ var MainForm = /** @class */ (function () {
         }
     };
     MainForm.prototype.drawFrameMain = function () {
+        if (this.gameScene.ui.frameMain) return;
         var frameMain = this.gameScene.ui.create.div('.frameMain', this.gameScene.ui.window);
         frameMain.style.position = 'absolute';
         frameMain.style.top = 'calc(50px)';
@@ -2237,6 +2235,7 @@ var MainForm = /** @class */ (function () {
         this.gameScene.ui.frameMain.appendChild(this.gameScene.ui.arena);
     };
     MainForm.prototype.drawFrameChat = function () {
+        if (this.gameScene.ui.frameChat) return;
         var _this = this;
         this.gameScene.ui.frameMain.style.right = '250px';
         var frameChat = this.gameScene.ui.create.div('.framechat', this.gameScene.ui.window);
@@ -2285,6 +2284,16 @@ var MainForm = /** @class */ (function () {
             adminOpt.value = "命令：刷新游戏设置";
             adminOpt.text = "★ 管理员：刷新游戏设置";
             selectChatPresetMsgs.appendChild(adminOpt);
+
+            var adminOpt2 = document.createElement("option");
+            adminOpt2.value = "命令：重载AI智脑";
+            adminOpt2.text = "★ 管理员：重载AI智脑";
+            selectChatPresetMsgs.appendChild(adminOpt2);
+
+            var adminOpt3 = document.createElement("option");
+            adminOpt3.value = "命令：清空无主房间";
+            adminOpt3.text = "★ 管理员：清空无主房间";
+            selectChatPresetMsgs.appendChild(adminOpt3);
         }
 
         selectChatPresetMsgs.addEventListener('change', function () {

@@ -220,6 +220,16 @@ var TractorPlayer = /** @class */ (function () {
                 adminOption.value = "命令：刷新游戏设置";
                 adminOption.text = "★ 管理员：刷新游戏设置";
                 selectPresetMsgs.appendChild(adminOption);
+
+                var adminOption2 = document.createElement("option");
+                adminOption2.value = "命令：重载AI智脑";
+                adminOption2.text = "★ 管理员：重载AI智脑";
+                selectPresetMsgs.appendChild(adminOption2);
+
+                var adminOption3 = document.createElement("option");
+                adminOption3.value = "命令：清空无主房间";
+                adminOption3.text = "★ 管理员：清空无主房间";
+                selectPresetMsgs.appendChild(adminOption3);
             }
         }
 
@@ -502,10 +512,12 @@ var TractorPlayer = /** @class */ (function () {
                 this.forumHomeUrl = forumUrl;
                 this.isAdmin = isAdmin; // 存入本地变量
                 
-                // 核心优化：身份确认后，才开始渲染大厅界面和系统按钮
-                this.mainForm.drawFrameMain();
-                this.mainForm.drawFrameChat();
-                this.mainForm.LoadUIUponConnect();
+                // 核心修复：如果是重连场景（UI 已存在），不要重复绘图，以免造成按钮重复和点击拦截
+                if (!this.mainForm.gameScene.ui.frameMain) {
+                    this.mainForm.drawFrameMain();
+                    this.mainForm.drawFrameChat();
+                    this.mainForm.LoadUIUponConnect();
+                }
                 return;
             }
             else if (m === "REDIRECT_TO_LOGIN") {

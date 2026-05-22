@@ -6,6 +6,16 @@
 
 <head>
     <title>Tractor</title>
+    <script>
+        // 核心优化：如果从 phpBB 跳转回来且带有 sid，静默清理 URL
+        (function() {
+            if (window.history.replaceState && window.location.search.indexOf('sid=') !== -1) {
+                var newSearch = window.location.search.replace(/[?&]sid=[^&]*/g, '').replace(/^&/, '?');
+                var newUrl = window.location.pathname + newSearch + window.location.hash;
+                window.history.replaceState({}, document.title, newUrl);
+            }
+        })();
+    </script>
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <style>
         * {
