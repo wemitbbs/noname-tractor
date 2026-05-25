@@ -75,6 +75,8 @@ var GameScene = /** @class */ (function () {
         // // if (this.qiangliangMin === undefined) this.qiangliangMin = '5'
         IDBHelper.maxReplays = (this.lib && this.lib.config && this.lib.config.maxReplays) ? this.lib.config.maxReplays : IDBHelper.maxReplays;
         this.coordinates = new Coordinates(this);
+        this.hasConnectedOnce = false;
+        this.initialRetryCount = 0;
         if (this.isReplayMode) {
             this.doReplay();
             return;
@@ -93,8 +95,7 @@ var GameScene = /** @class */ (function () {
         var isIPPort = IPPort.test(this.hostName) || this.hostName.includes("localhost") || this.hostName.includes("/");
         if (isIPPort) {
             this.wsprotocal = window.location.protocol === "https:" ? "wss" : "ws";
-        }
-        else {
+        } else {
             if (!(/(^|\s)((https?:\/\/)?[\w-]+(\.[\w-]+)*\.?(:\d+)?(\/.*)?$)/gi.test(this.hostName)) && !this.processAuth()) {
                 document.body.innerHTML = "<div>!!! \u89E3\u6790\u670D\u52A1\u5668\u5730\u5740\u5931\u8D25\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(this.hostNameOriginal, "</div>");
                 this.hostName = "";
@@ -108,8 +109,20 @@ var GameScene = /** @class */ (function () {
         this.playerEmail = playerEmail;
         this.soundPool = {};
         this.loadAudioFiles();
-        this.connect();
+        this.wakeUpServer();
     }
+    // 核心优化：针对共享主机，先通过 HTTP 唤醒 Passenger 进程再进行 WSS 连接
+    // silent 为 true 时仅作为心跳唤醒，不执行后续 connect
+    GameScene.prototype.wakeUpServer = function (silent) {
+        var _this = this;
+        var httpUrl = "".concat(window.location.protocol, "//").concat(this.hostName);
+        // 使用 no-cors 模式，即便没有 CORS 也能触发服务器
+        fetch(httpUrl, { mode: 'no-cors' }).then(function () {
+            if (!silent) _this.connect();
+        }).catch(function () {
+            if (!silent) _this.connect();
+        });
+    };
     // non-replay mode, online
     GameScene.prototype.connect = function () {
         if (!this.hostName || (this.websocket && this.websocket.readyState === WebSocket.CONNECTING))
@@ -123,6 +136,15 @@ var GameScene = /** @class */ (function () {
             this.websocket.gs = this;
             var _this = this;
             this.websocket.onopen = function () {
+                _this.hasConnectedOnce = true;
+                _this.initialRetryCount = 0;
+
+                // 核心修复：建立 HTTP 定时心跳，防止 Passenger 进入待机模式
+                if (_this.httpKeepAliveTimer) clearInterval(_this.httpKeepAliveTimer);
+                _this.httpKeepAliveTimer = setInterval(function () {
+                    _this.wakeUpServer(true);
+                }, 60000); // 每 1 分钟发一次 HTTP 请求保持活跃
+
                 // 核心修复：连接成功后，清理重连状态和 UI
                 if (_this.reconnectTimer) {
                     clearInterval(_this.reconnectTimer);
@@ -143,6 +165,18 @@ var GameScene = /** @class */ (function () {
                     }
                 }
                 var enterHallInfo = new EnterHallInfo(this.gs.nickNameOverridePass, this.gs.playerEmail, "".concat(CommonMethods.PLAYER_CLIENT_TYPE_TLJAPP).concat(CommonMethods.PLAYER_ENTER_HALL_DELIMITER).concat(this.gs.clientVersion));
+                
+                // 核心修复：前端主动从 Cookie 中抓取 sid 并随消息发送。
+                // 这样即使 WebSocket 握手 Header 里的 Cookie 被代理拦截，后端也能通过 Body 拿到 sid 进行认证。
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var c = cookies[i].trim();
+                    if (c.indexOf('_sid=') !== -1) {
+                        enterHallInfo.sid = c.split('=')[1];
+                        break;
+                    }
+                }
+
                 this.gs.sendMessageToServer(CommonMethods.PLAYER_ENTER_HALL_REQUEST, this.gs.playerName, JSON.stringify(enterHallInfo));
                 
                 // 如果是重连，不要重新创建 MainForm，否则会造成 UI 重叠和事件监听冲突
@@ -225,11 +259,19 @@ var GameScene = /** @class */ (function () {
                 }
             };
             this.websocket.onerror = function (e) {
+                if (_this.httpKeepAliveTimer) {
+                    clearInterval(_this.httpKeepAliveTimer);
+                    _this.httpKeepAliveTimer = null;
+                }
                 if (_this.reconnecting || _this.isKicked) return;
                 console.error("WS Error:", e);
                 _this.reconnect();
             };
             this.websocket.onclose = function (e) {
+                if (_this.httpKeepAliveTimer) {
+                    clearInterval(_this.httpKeepAliveTimer);
+                    _this.httpKeepAliveTimer = null;
+                }
                 if (_this.reconnecting || _this.isKicked) return;
                 console.log("WS closed by the server. ", e.code, e.reason);
                 _this.reconnect();
@@ -255,25 +297,36 @@ var GameScene = /** @class */ (function () {
         }
 
         // 显示重连 UI
-        var overlay = document.getElementById('reconnect-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'reconnect-overlay';
-            overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0';
-            overlay.style.width = '100%'; overlay.style.height = '100%';
-            overlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
-            overlay.style.color = 'white'; overlay.style.display = 'flex';
-            overlay.style.flexDirection = 'column'; overlay.style.justifyContent = 'center';
-            overlay.style.alignItems = 'center'; overlay.style.zIndex = '100000';
-            overlay.style.fontFamily = 'xinwei, "Microsoft YaHei"';
-            overlay.innerHTML = '<h2 style="font-size:30px;margin-bottom:20px;">与服务器连接断开</h2>' +
-                                '<p style="font-size:18px;margin-bottom:30px;">正在尝试自动重连，请稍候...</p>' +
-                                '<div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;animation:spin 1s linear infinite;"></div>' +
-                                '<style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>';
-            document.body.appendChild(overlay);
+        if (this.hasConnectedOnce) {
+            var overlay = document.getElementById('reconnect-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'reconnect-overlay';
+                overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0';
+                overlay.style.width = '100%'; overlay.style.height = '100%';
+                overlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
+                overlay.style.color = 'white'; overlay.style.display = 'flex';
+                overlay.style.flexDirection = 'column'; overlay.style.justifyContent = 'center';
+                overlay.style.alignItems = 'center'; overlay.style.zIndex = '100000';
+                overlay.style.fontFamily = 'xinwei, "Microsoft YaHei"';
+                overlay.innerHTML = '<h2 style="font-size:30px;margin-bottom:20px;">与服务器连接断开</h2>' +
+                                    '<p style="font-size:18px;margin-bottom:30px;">正在尝试自动重连，请稍候...</p>' +
+                                    '<div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;animation:spin 1s linear infinite;"></div>' +
+                                    '<style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>';
+                document.body.appendChild(overlay);
+            }
         }
 
         this.reconnectTimer = setInterval(function () {
+            if (!_this.hasConnectedOnce) {
+                _this.initialRetryCount++;
+                if (_this.initialRetryCount >= 6) {
+                    clearInterval(_this.reconnectTimer);
+                    _this.reconnectTimer = null;
+                    document.body.innerHTML = "<div>!!! \u5C1D\u8BD5\u8FDE\u63A5\u670D\u52A1\u5668\u51FA\u9519\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(_this.hostNameOriginal, "</div>");
+                    return;
+                }
+            }
             console.log("Attempting to reconnect...");
             _this.connect();
         }, 3000);

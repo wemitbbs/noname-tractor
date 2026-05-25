@@ -38,7 +38,7 @@ window.noname_source_list=[
 	'game/codemirror.js',
 	'game/config.js',
 	'game/directory.js',
-	'game/game.js',
+	'game/game.min.js',
 	'game/http.js',
 	'game/jszip.js',
 	'game/keyWords.js',

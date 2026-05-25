@@ -1536,6 +1536,11 @@ var DrawingFormHelper = /** @class */ (function () {
         var posY = "calc(".concat(this.mainForm.gameScene.coordinates.danmuPositionY, " + ").concat(this.mainForm.gameScene.coordinates.danmuOffset * danmuIndex, "px)");
         var lblDanmu = this.mainForm.gameScene.ui.create.div('', msgString, this.mainForm.gameScene.ui.frameMain);
         lblDanmu.style.color = 'white';
+        // 核心优化：高亮弹幕系统消息和全服广播
+        if (msgString.indexOf("【系统消息】") !== -1 || msgString.indexOf("【全服广播】") !== -1) {
+            lblDanmu.style.color = "yellow";
+            lblDanmu.style.fontWeight = "bold";
+        }
         lblDanmu.style.fontFamily = 'serif';
         lblDanmu.style.fontSize = '25px';
         lblDanmu.style.left = "calc(100%)";

@@ -60,7 +60,7 @@ var TractorPlayer = /** @class */ (function () {
         }, this.PingInterval + this.PingInterval / 2);
         // check noDongtuUntil
         if (this.mainForm.gameScene.noDongtu.toLowerCase() === "true" && this.mainForm.isNoDongtuUntilExpired(this.mainForm.DaojuInfo)) {
-            var finalMsg = "".concat(CommonMethods.systemMsgPrefix, "\u9053\u5177\u3010\u5173\u95ED\u52A8\u56FE\u3011\u5DF2\u5230\u671F");
+            var finalMsg = "".concat(CommonMethods.systemMsgPrefix, "道具【关闭动图】已到期");
             this.mainForm.drawingFormHelper.DrawDanmu(finalMsg);
             this.mainForm.appendChatMsg(finalMsg);
             this.mainForm.gameScene.noDongtu = "false";
@@ -68,7 +68,7 @@ var TractorPlayer = /** @class */ (function () {
         }
         // check noChatUntil
         if (this.mainForm.gameScene.noChat && !this.mainForm.isChatBanned(this.MyOwnId)) {
-            var finalMsg = "".concat(CommonMethods.systemMsgPrefix, "\u7981\u8A00\u5DF2\u89E3\u9664\uFF0C\u8BF7\u5237\u65B0\u9875\u9762\u4F7F\u5176\u751F\u6548");
+            var finalMsg = "".concat(CommonMethods.systemMsgPrefix, "禁言已解除，请刷新页面使其生效");
             this.mainForm.drawingFormHelper.DrawDanmu(finalMsg);
             this.mainForm.appendChatMsg(finalMsg);
             this.mainForm.gameScene.noChat = false;
@@ -186,8 +186,8 @@ var TractorPlayer = /** @class */ (function () {
         this.CurrentRoomSetting = roomSetting;
         if (this.mainForm.gameScene.ui.roomNameText
             && this.mainForm.gameScene.ui.roomOwnerText) {
-            this.mainForm.gameScene.ui.roomNameText.innerHTML = "\u623F\u95F4\uFF1A".concat(roomSetting.RoomName);
-            this.mainForm.gameScene.ui.roomOwnerText.innerHTML = "\u623F\u4E3B\uFF1A".concat(this.mainForm.gameScene.hidePlayerID ? "" : roomSetting.RoomOwner);
+            this.mainForm.gameScene.ui.roomNameText.innerHTML = "房间：".concat(roomSetting.RoomName);
+            this.mainForm.gameScene.ui.roomOwnerText.innerHTML = "房主：".concat(this.mainForm.gameScene.hidePlayerID ? "" : roomSetting.RoomOwner);
         }
         // 重画头像这样新任房主可将玩家请出房间
         this.mainForm.NewPlayerJoined(!this.IsTryingReenter, true);
@@ -246,12 +246,15 @@ var TractorPlayer = /** @class */ (function () {
                 msgs.push("");
             }
             msgs.push("房间设置：");
-            msgs.push("\u623F\u95F4\u5C5E\u6027\uFF1A".concat(roomSetting.IsGameCasual == 0 ? "严肃活泼局-步步为营、力求最优解" : "休闲娱乐局-随心而玩，轻松娱乐为主"));
-            msgs.push("\u5173\u95ED\u5927\u724C\u8BED\u97F3\u53CA\u753B\u9762\u63D0\u793A\uFF1A".concat(roomSetting.HideOverridingFlag ? "是" : "否"));
-            msgs.push("\u51FA\u724C\u65F6\u9650\uFF1A".concat(roomSetting.secondsToShowCards > 0 ? roomSetting.secondsToShowCards + "秒" : "不限制"));
-            msgs.push("\u57CB\u5E95\u65F6\u9650\uFF1A".concat(roomSetting.secondsToDiscardCards > 0 ? roomSetting.secondsToDiscardCards + "秒" : "不限制"));
+            msgs.push("开启聊天：".concat(roomSetting.EnableChat ? "是" : "否"));
+            msgs.push("允许观察者聊天：".concat(roomSetting.AllowObserverChat ? "是" : "否"));
+            msgs.push("房间属性：".concat(roomSetting.IsGameCasual == 0 ? "严肃活泼局-步步为营、力求最优解" : "休闲娱乐局-随心而玩，轻松娱乐为主"));
+            msgs.push("关闭大牌语音及画面提示：".concat(roomSetting.HideOverridingFlag ? "是" : "否"));
+            msgs.push("出牌时限：".concat(roomSetting.secondsToShowCards > 0 ? roomSetting.secondsToShowCards + "秒" : "不限制"));
+            msgs.push("埋底时限：".concat(roomSetting.secondsToDiscardCards > 0 ? roomSetting.secondsToDiscardCards + "秒" : "不限制"));
             this.NotifyMessage(msgs);
         }
+        this.mainForm.toggleChatUI();
     };
     TractorPlayer.prototype.NotifyCurrentHandState = function (currentHandState, notifyType) {
         var trumpChanged = false;
@@ -537,7 +540,7 @@ var TractorPlayer = /** @class */ (function () {
                 this.mainForm.gameScene.playAudio(CommonMethods.audioWin);
             }
             else if (m.includes(CommonMethods.reenterRoomSignal)) {
-                if (m.includes("\u3010".concat(this.MyOwnId, "\u3011"))) {
+                if (m.includes("【".concat(this.MyOwnId, "】"))) {
                     this.IsTryingReenter = true;
                 }
             }

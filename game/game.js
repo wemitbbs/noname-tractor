@@ -6720,7 +6720,7 @@
 					}
 					lib.configprefix+='_';
 				}
-				window.resetGameTimeout=setTimeout(lib.init.reset,parseInt(localStorage.getItem(lib.configprefix+'loadtime'))||5000);
+				window.resetGameTimeout=setTimeout(lib.init.reset,parseInt(localStorage.getItem(lib.configprefix+'loadtime'))||15000);
 				if(window.cordovaLoadTimeout){
 					clearTimeout(window.cordovaLoadTimeout);
 					delete window.cordovaLoadTimeout;
@@ -7496,7 +7496,7 @@
 					}
 
 					var ua=navigator.userAgent.toLowerCase();
-					if('ontouchstart' in document){
+					if(false && 'ontouchstart' in document){
 						if(!lib.config.totouched){
 							game.saveConfig('totouched',true);
 							if(lib.device){
@@ -8229,24 +8229,24 @@
 							);
 						}
 						else{
-							if(confirm('游戏似乎未正常载入，是否重置游戏？')){
-								localStorage.removeItem('noname_inited');
-								window.location.reload();
-							}
+							// 核心优化：自动执行重置，减少无意义弹窗
+							console.error('游戏似乎未正常载入，正在执行自动重置...');
+							localStorage.removeItem('noname_inited');
+							window.location.reload();
 						}
 					}
 					else{
-						if(confirm('游戏似乎未正常载入，是否重置游戏？')){
-							var onlineKey=localStorage.getItem(lib.configprefix+'key');
-							localStorage.clear();
-							if(onlineKey){
-								localStorage.setItem(lib.configprefix+'key',onlineKey);
-							}
-							if(indexedDB) indexedDB.deleteDatabase(lib.configprefix+'data');
-							setTimeout(function(){
-								window.location.reload();
-							},200);
+						// 核心优化：自动执行重置，减少无意义弹窗
+						console.error('游戏似乎未正常载入，正在执行自动重置并清理缓存...');
+						var onlineKey=localStorage.getItem(lib.configprefix+'key');
+						localStorage.clear();
+						if(onlineKey){
+							localStorage.setItem(lib.configprefix+'key',onlineKey);
 						}
+						if(indexedDB) indexedDB.deleteDatabase(lib.configprefix+'data');
+						setTimeout(function(){
+							window.location.reload();
+						},200);
 					}
 				}
 			},
@@ -8932,7 +8932,7 @@
 							}
 							splash.delete(1000);
 							delete window.inSplash;
-							window.resetGameTimeout=setTimeout(lib.init.reset,5000);
+							window.resetGameTimeout=setTimeout(lib.init.reset,15000);
 
 							this.listenTransition(function(){
 								lib.init.js(lib.assetURL+'mode',lib.config.mode,proceed);
@@ -45888,7 +45888,7 @@
 					if(lib.forcehide.contains('cardPileButton')) ui.cardPileButton.classList.add('forcehide');
 				}
 				ui.volumn=ui.create.system('♫');
-				lib.setPopped(ui.volumn,ui.click.volumn,200);
+				lib.setPopped(ui.volumn,ui.click.volumn,200,null,true);
 				// if(lib.config.show_pause) ui.auto.style.marginLeft='10px';
 				if(!lib.config.show_volumn){
 					ui.volumn.style.display='none';

@@ -18,6 +18,8 @@ var RoomSetting = /** @class */ (function () {
         this.IsGameCasual = 0;
         this.HideOverridingFlag = false;
         this.RandomTeamUp = false;
+        this.EnableChat = true;
+        this.AllowObserverChat = false;
     }
     RoomSetting.prototype.CloneFrom = function (from) {
         this.RoomName = from.RoomName;
@@ -37,6 +39,8 @@ var RoomSetting = /** @class */ (function () {
         this.IsGameCasual = from.IsGameCasual;
         this.HideOverridingFlag = from.HideOverridingFlag;
         this.RandomTeamUp = from.RandomTeamUp;
+        this.EnableChat = from.EnableChat;
+        this.AllowObserverChat = from.AllowObserverChat;
     };
     return RoomSetting;
 }());

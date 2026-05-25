@@ -628,6 +628,28 @@ export var CommonMethods = /** @class */ (function () {
     CommonMethods.distributeLast8Interval = 0.1;
     CommonMethods.distributeLast8Duration = 0.5;
     CommonMethods.animatedEmojiTypeLength = 7;
+    // chat UI toggle
+    CommonMethods.chatUIChangeDuration = 0.5;
+    // divChatHistory.style.bottom
+    CommonMethods.divChatHistoryBottomChatToggleValues = [
+        'calc(100px + 3em)',
+        'calc(90px)'
+    ];
+    // selectChatPresetMsgs.style.bottom
+    CommonMethods.selectChatPresetMsgsBottomChatToggleValues = [
+        'calc(50px + 3em + 20px)',
+        'calc(50px)'
+    ];
+    // btnSendChat.style.bottom
+    CommonMethods.btnSendChatBottomChatToggleValues = [
+        'calc(50px + 3em + 20px - 8px)',
+        'calc(50px)'
+    ];
+    // textAreaChatMsg.style.display
+    CommonMethods.textAreaChatMsgDisplayChatToggleValues = [
+        'inline-block',
+        'none'
+    ];
     CommonMethods.emojiMsgs = [
         "这波操作，666！",
         "哈哈哈哈~~",
@@ -680,7 +702,7 @@ export var CommonMethods = /** @class */ (function () {
         "77": 14,
     };
     CommonMethods.emojiWarningIntervalInSec = 3;
-    CommonMethods.emojiWarningMsg = "\u8BF7\u4E0D\u8981\u8FC7\u4E8E\u9891\u7E41\u53D1\u9001\u6D88\u606F\uFF0C\u6BCF\u6761\u6D88\u606F\u95F4\u9694".concat(CommonMethods.emojiWarningIntervalInSec, "\u79D2");
+    CommonMethods.emojiWarningMsg = "请不要过于频繁发送消息，每条消息间隔".concat(CommonMethods.emojiWarningIntervalInSec, "秒");
     CommonMethods.hiddenEffectsWarningMsg = "隐藏技正在进行中，请稍后再试";
     CommonMethods.nickNameOverridePassLength = 5;
     CommonMethods.cookieExpireInDays = 3650;
@@ -688,7 +710,7 @@ export var CommonMethods = /** @class */ (function () {
     CommonMethods.loginSuccessFlag = "LoginSuccess";
     CommonMethods.qiangliangkaCost = 3;
     CommonMethods.sendBroadcastPrefix = "@all";
-    CommonMethods.sendBroadcastCost = 10;
+    CommonMethods.sendBroadcastCost = 3;
     CommonMethods.buyNoDongtuUntilCost = 0;
     CommonMethods.chatMessageCost = 0;
     CommonMethods.defaultSkinInUse = "skin_questionmark";

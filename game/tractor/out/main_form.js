@@ -44,7 +44,6 @@ var MainForm = /** @class */ (function () {
         this.firstWinBySha = 3;
         // public sgcsPlayer: SGCSPlayer;
         this.rightSideButtonDepth = 1;
-        this.selectPresetMsgsIsOpen = false;
         this.gameScene = gs;
         this.tractorPlayer = new TractorPlayer(this);
         this.drawingFormHelper = new DrawingFormHelper(this);
@@ -85,6 +84,21 @@ var MainForm = /** @class */ (function () {
             }
         }
         this.gameScene.ui.btnShowLastTrick.innerHTML = (this.tractorPlayer.ShowLastTrickCards ? "还原" : "上轮");
+    };
+    MainForm.prototype.toggleChatUI = function () {
+        var _this = this;
+        if (this.gameScene.isInGameRoom() && !this.tractorPlayer.CurrentRoomSetting.EnableChat) {
+            this.gameScene.ui.textAreaChatMsg.value = "";
+        }
+        var chatUIToggleIndex = this.gameScene.isInGameRoom() ? (this.tractorPlayer.CurrentRoomSetting.EnableChat ? 0 : 1) : 0;
+        this.gameScene.ui.divChatHistory.style.bottom = CommonMethods.divChatHistoryBottomChatToggleValues[chatUIToggleIndex];
+        this.gameScene.ui.selectPresetMsgs.style.bottom = CommonMethods.selectChatPresetMsgsBottomChatToggleValues[chatUIToggleIndex];
+        this.gameScene.ui.btnSendChat.style.bottom = CommonMethods.btnSendChatBottomChatToggleValues[chatUIToggleIndex];
+        // delay if chat is changed from disabled to enabled
+        var timeoutDelay = chatUIToggleIndex == 0 ? CommonMethods.chatUIChangeDuration : 0;
+        setTimeout(function () {
+            _this.gameScene.ui.textAreaChatMsg.style.display = CommonMethods.textAreaChatMsgDisplayChatToggleValues[chatUIToggleIndex];
+        }, timeoutDelay * 1000);
     };
     MainForm.prototype.NewPlayerReadyToStart = function (readyToStart) {
         if (CommonMethods.GetReadyCount(this.tractorPlayer.CurrentGameState.Players) < 4) {
@@ -150,7 +164,7 @@ var MainForm = /** @class */ (function () {
             var btnRandom = document.getElementById("btnRandom");
             if (btnRandom) {
                 var cutPoint = 0;
-                var cutInfo = "\u53D6\u6D88,".concat(cutPoint);
+                var cutInfo = "取消,".concat(cutPoint);
                 this.CutCardShoeCardsCompleteEventHandler(cutPoint, cutInfo);
                 return;
             }
@@ -442,7 +456,7 @@ var MainForm = /** @class */ (function () {
                     tempWidOb = Math.max(tempWidOb, newWid);
                 }
                 var newLine = j === 0 || obNameText.length === 0 ? "" : "<br/>";
-                obNameText += "".concat(newLine, "\u3010").concat(ob, "\u3011");
+                obNameText += "".concat(newLine, "【").concat(ob, "】");
             }
             var pokerPlayerOb = gs.ui.create.div('.pokerPlayerObGameRoom', obNameText, gs.ui.frameGameRoom);
             pokerPlayerOb.style.fontFamily = 'serif';
@@ -1055,7 +1069,7 @@ var MainForm = /** @class */ (function () {
             }
             else {
                 if (curPlayer && !curPlayer.IsReadyToStart) {
-                    this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "\u601D\u7D22\u4E2D";
+                    this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "思索中";
                 }
                 else {
                     if (curPlayer && onesTurnPlayerID && curPlayer.PlayerId === onesTurnPlayerID) {
@@ -1074,7 +1088,7 @@ var MainForm = /** @class */ (function () {
                     this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "".concat(this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML, suffix);
                 }
                 if (isUsingQiangliangka) {
-                    this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "".concat(this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML, "\u3010\u62A2\u3011");
+                    this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML = "".concat(this.gameScene.ui.pokerPlayerStartersLabel[i].innerHTML, "【抢】");
                 }
             }
             curIndex = (curIndex + 1) % 4;
@@ -1363,7 +1377,7 @@ var MainForm = /** @class */ (function () {
         var noDongtuUntilExpDate = document.getElementById("lblNoDongtuUntilExpDate");
         if (!this.isNoDongtuUntilExpired(this.DaojuInfo)) {
             noDongtuUntilExpDate.style.display = "block";
-            noDongtuUntilExpDate.innerHTML = "\u6709\u6548\u671F\u81F3".concat(this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noDongtuUntil);
+            noDongtuUntilExpDate.innerHTML = "有效期至".concat(this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noDongtuUntil);
         }
         var noDongtu = document.getElementById("cbxNoDongtu");
         noDongtu.checked = gs.noDongtu.toLowerCase() === "true";
@@ -1407,7 +1421,7 @@ var MainForm = /** @class */ (function () {
             var ul = document.createElement("ul");
             for (var i = 0; i < sortable.length; i++) {
                 var li = document.createElement("li");
-                li.innerText = "\u3010".concat(sortable[i][0], "\u3011").concat(sortable[i][1]);
+                li.innerText = "【".concat(sortable[i][0], "】").concat(sortable[i][1]);
                 ul.appendChild(li);
             }
             divShengbiLeadingBoard.appendChild(ul);
@@ -1468,6 +1482,21 @@ var MainForm = /** @class */ (function () {
                 _this.tractorPlayer.CurrentRoomSetting.DisplaySignalCardInfo = !cbxNoSignalCard_1.checked;
                 gs.sendMessageToServer(SaveRoomSetting_REQUEST, _this.tractorPlayer.MyOwnId, JSON.stringify(_this.tractorPlayer.CurrentRoomSetting));
             };
+            var cbxEnableChat_1 = document.getElementById("cbxEnableChat");
+            cbxEnableChat_1.checked = this.tractorPlayer.CurrentRoomSetting.EnableChat;
+            cbxEnableChat_1.onchange = function () {
+                _this.tractorPlayer.CurrentRoomSetting.EnableChat = cbxEnableChat_1.checked;
+                gs.sendMessageToServer(SaveRoomSetting_REQUEST, _this.tractorPlayer.MyOwnId, JSON.stringify(_this.tractorPlayer.CurrentRoomSetting));
+                // we have to explicitly call toggleChatUI because this.tractorPlayer.CurrentRoomSetting.EnableChat has already been changed to the new value
+                // hence notify room setting won't detect the value change, and won't trigger toggleChatUI any more
+                _this.toggleChatUI();
+            };
+            var cbxAllowObserverChat_1 = document.getElementById("cbxAllowObserverChat");
+            cbxAllowObserverChat_1.checked = this.tractorPlayer.CurrentRoomSetting.AllowObserverChat;
+            cbxAllowObserverChat_1.onchange = function () {
+                _this.tractorPlayer.CurrentRoomSetting.AllowObserverChat = cbxAllowObserverChat_1.checked;
+                gs.sendMessageToServer(SaveRoomSetting_REQUEST, _this.tractorPlayer.MyOwnId, JSON.stringify(_this.tractorPlayer.CurrentRoomSetting));
+            };
             var selectIsGameCasual_1 = document.getElementById("selectIsGameCasual");
             selectIsGameCasual_1.value = this.tractorPlayer.CurrentRoomSetting.IsGameCasual;
             selectIsGameCasual_1.onchange = function () {
@@ -1509,24 +1538,56 @@ var MainForm = /** @class */ (function () {
                 cbxNoOverridingFlag_1.disabled = true;
                 cbxNoSignalCard_1.disabled = true;
                 selectIsGameCasual_1.disabled = true;
+                cbxEnableChat_1.disabled = true;
+                cbxAllowObserverChat_1.disabled = true;
                 selectSecondsToShowCards_1.disabled = true;
                 selectSecondsToDiscardCards_1.disabled = true;
                 selectStarter_1.disabled = true;
                 // selectTeam1Rank.disabled = true;
                 // selectTeam2Rank.disabled = true;
-                if (!this.tractorPlayer.isObserver) {
-                    var btnBecomeRoomOwner = document.getElementById("btnBecomeRoomOwner");
-                    btnBecomeRoomOwner.style.display = "inline";
-                    btnBecomeRoomOwner.onclick = function () {
-                        _this.tractorPlayer.CurrentRoomSetting.RoomOwner = _this.tractorPlayer.MyOwnId;
-                        gs.sendMessageToServer(SaveRoomSetting_REQUEST, _this.tractorPlayer.MyOwnId, JSON.stringify(_this.tractorPlayer.CurrentRoomSetting));
-                        _this.resetGameRoomUI();
-                    };
-                }
             }
             else {
                 var divRoomSettings = document.getElementById("divRoomSettings");
                 divRoomSettings.style.display = "block";
+
+                // 核心增强：房主转让功能
+                var spanTransferRoomOwner = document.getElementById("spanTransferRoomOwner");
+                spanTransferRoomOwner.style.display = "inline";
+                var selectTransferRoomOwner_1 = document.getElementById("selectTransferRoomOwner");
+                var btnTransferRoomOwner = document.getElementById("btnTransferRoomOwner");
+                for (var i = 0; i < this.tractorPlayer.CurrentGameState.Players.length; i++) {
+                    var p = this.tractorPlayer.CurrentGameState.Players[i];
+                    // 仅显示其他坐着的真人玩家
+                    if (p && p.PlayerId !== this.tractorPlayer.MyOwnId && !p.PlayerId.endsWith('[bot]') && p.PlayerId.indexOf('[空位') === -1) {
+                        var optionElement = document.createElement("option");
+                        optionElement.value = p.PlayerId;
+                        optionElement.text = p.PlayerId;
+                        selectTransferRoomOwner_1.add(optionElement);
+                    }
+                }
+                
+                // 交互优化：如果没有符合条件的真人玩家，禁用确定按钮
+                if (selectTransferRoomOwner_1.options.length === 0) {
+                    btnTransferRoomOwner.disabled = true;
+                }
+
+                btnTransferRoomOwner.onclick = function () {
+                    var newOwner = selectTransferRoomOwner_1.value;
+                    if (newOwner) {
+                        // 核心修复：不直接修改本地状态，而是发送克隆后的新设置给后端。
+                        // 这样如果后端校验失败（目标离开），本地仍然保持房主身份。
+                        var tempSetting = CommonMethods.deepCopy(_this.tractorPlayer.CurrentRoomSetting);
+                        tempSetting.RoomOwner = newOwner;
+                        gs.sendMessageToServer(SaveRoomSetting_REQUEST, _this.tractorPlayer.MyOwnId, JSON.stringify(tempSetting));
+                        
+                        // 转让后自动关闭设置窗口
+                        if (gs.ui.inputFormWrapper) {
+                            gs.ui.inputFormWrapper.remove();
+                            delete gs.ui.inputFormWrapper;
+                        }
+                    }
+                };
+
                 var btnResumeGame = document.getElementById("btnResumeGame");
                 btnResumeGame.onclick = function () {
                     if (CommonMethods.AllOnline(_this.tractorPlayer.CurrentGameState.Players) && !_this.tractorPlayer.isObserver && SuitEnums.HandStep.DistributingCards <= _this.tractorPlayer.CurrentHandState.CurrentHandStep && _this.tractorPlayer.CurrentHandState.CurrentHandStep <= SuitEnums.HandStep.Playing) {
@@ -1671,20 +1732,13 @@ var MainForm = /** @class */ (function () {
     MainForm.prototype.clearManualLogout = function() {
         sessionStorage.removeItem('isManualLogout');
     };
-    MainForm.prototype.handleSelectPresetMsgsClick = function (selectPresetMsgs) {
-        if (this.selectPresetMsgsIsOpen) {
-            this.selectPresetMsgsIsOpen = false;
-            this.sendPresetMsgs(selectPresetMsgs);
-        }
-    };
-
     MainForm.prototype.showOfflineScreen = function (msg) {
         this.gameScene.isKicked = true; // 设置标记，防止触发自动重连逻辑
         localStorage.removeItem("tractor_auto_sid");
         sessionStorage.setItem("isManualLogout", "true");
         this.destroyGameRoom();
         this.destroyGameHall();
-        
+
         var overlay = document.createElement("div");
         overlay.style.position = "fixed";
         overlay.style.top = "0";
@@ -1713,16 +1767,14 @@ var MainForm = /** @class */ (function () {
         btn.onclick = function() { window.location.reload(); };
         overlay.appendChild(btn);
     };
-    MainForm.prototype.sendPresetMsgs = function (selectPresetMsgs) {
-        var selectedIndex = selectPresetMsgs.selectedIndex;
-        var selectedValue = selectPresetMsgs.value;
-        var args = [selectedIndex, CommonMethods.GetRandomInt(CommonMethods.winEmojiLength), selectedValue];
-        this.sendEmojiWithCheck(args);
-    };
     MainForm.prototype.emojiSubmitEventhandler = function () {
+        var msgString = this.gameScene.ui.textAreaChatMsg.value;
+        if (msgString) {
+            msgString = msgString.trim().replace(/(\r\n|\n|\r)/gm, "");
+        }
+        this.gameScene.ui.textAreaChatMsg.value = "";
         var emojiType = -1;
         var emojiIndex = -1;
-        var msgString = "";
         if (!msgString) {
             msgString = this.gameScene.ui.selectPresetMsgs.value;
             emojiType = this.gameScene.ui.selectPresetMsgs.selectedIndex;
@@ -1738,7 +1790,7 @@ var MainForm = /** @class */ (function () {
     };
     MainForm.prototype.sendBroadcastMsgType = function (msg) {
         if (this.isChatBanned(this.tractorPlayer.MyOwnId)) {
-            alert("\u7981\u8A00\u751F\u6548\u4E2D\uFF0C\u8BF7\u5728\u89E3\u7981\u540E\u91CD\u8BD5\uFF0C\u89E3\u7981\u65E5\u671F\uFF1A".concat(this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noChatUntil));
+            alert("禁言生效中，请在解禁后重试，解禁日期：".concat(this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noChatUntil));
             return;
         }
         var chatQuota = 0;
@@ -1762,7 +1814,7 @@ var MainForm = /** @class */ (function () {
             alert("升币余额不足，无法关闭动图");
             return;
         }
-        var msg = "\u6B64\u6B21\u8D2D\u4E70\u5C06\u6D88\u8017\u5347\u5E01\u3010".concat(CommonMethods.buyNoDongtuUntilCost, "\u3011\uFF0C\u8D2D\u4E70\u524D\u4F59\u989D\uFF1A\u3010").concat(shengbi, "\u3011\uFF0C\u8D2D\u4E70\u540E\u4F59\u989D\uFF1A\u3010").concat(shengbi - CommonMethods.buyNoDongtuUntilCost, "\u3011\uFF0C\u662F\u5426\u786E\u5B9A\uFF1F");
+        var msg = "此次购买将消耗升币【".concat(CommonMethods.buyNoDongtuUntilCost, "】，购买前余额：【").concat(shengbi, "】，购买后余额：【").concat(shengbi - CommonMethods.buyNoDongtuUntilCost, "】，是否确定？");
         var c = window.confirm(msg);
         if (!c)
             return;
@@ -1778,7 +1830,7 @@ var MainForm = /** @class */ (function () {
     MainForm.prototype.sendEmojiWithCheck = function (args) {
         var _this = this;
         if (this.isChatBanned(this.tractorPlayer.MyOwnId)) {
-            alert("\u7981\u8A00\u751F\u6548\u4E2D\uFF0C\u8BF7\u5728\u89E3\u7981\u540E\u91CD\u8BD5\uFF0C\u89E3\u7981\u65E5\u671F\uFF1A".concat(this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noChatUntil));
+            alert("禁言生效中，请在解禁后重试，解禁日期：".concat(this.DaojuInfo.daojuInfoByPlayer[this.tractorPlayer.MyOwnId].noChatUntil));
             return;
         }
         var emojiType = args[0];
@@ -1818,7 +1870,7 @@ var MainForm = /** @class */ (function () {
         if (fullSkinInfo && daojuInfoByPlayer.Shengbi >= fullSkinInfo[skinName].skinCost) {
             var msg = "";
             if (fullSkinInfo[skinName].skinCost > 0) {
-                msg = "\u6B64\u6B21\u8D2D\u4E70\u5C06\u6D88\u8017\u5347\u5E01\u3010".concat(fullSkinInfo[skinName].skinCost, "\u3011\uFF0C\u8D2D\u4E70\u524D\u4F59\u989D\uFF1A\u3010").concat(daojuInfoByPlayer.Shengbi, "\u3011\uFF0C\u8D2D\u4E70\u540E\u4F59\u989D\uFF1A\u3010").concat(daojuInfoByPlayer.Shengbi - fullSkinInfo[skinName].skinCost, "\u3011\uFF0C\u662F\u5426\u786E\u5B9A\uFF1F");
+                msg = "此次购买将消耗升币【".concat(fullSkinInfo[skinName].skinCost, "】，购买前余额：【").concat(daojuInfoByPlayer.Shengbi, "】，购买后余额：【").concat(daojuInfoByPlayer.Shengbi - fullSkinInfo[skinName].skinCost, "】，是否确定？");
             }
             return [true, msg];
         }
@@ -1891,7 +1943,7 @@ var MainForm = /** @class */ (function () {
                     var option = document.createElement("option");
                     option.value = key;
                     var isOwned = ownedSkinInfoList_1.includes(key);
-                    var priceText = isOwned ? "【已拥有】" : "\u4EF7\u683C\u3010".concat(val.skinCost, "\u3011\u5347\u5E01");
+                    var priceText = isOwned ? "【已拥有】" : "价格【".concat(val.skinCost, "】升币");
                     option.text = "".concat(val.skinDesc, " - ").concat(priceText);
                     selectFullSkinInfo.add(option);
                 }
@@ -1918,8 +1970,8 @@ var MainForm = /** @class */ (function () {
                     if (curSkinInfo) {
                         lblSkinSex.innerHTML = curSkinInfo.skinSex === "f" ? "女性" : "男性";
                         lblSkinType.innerHTML = curSkinInfo.skinType === 0 ? "静态" : "动态";
-                        lblSkinCost.innerHTML = "\u3010\u5347\u5E01\u3011x".concat(curSkinInfo.skinCost);
-                        var skinOwnersMsg = curSkinInfo.skinOwners > 0 ? "\u5DF2\u6709\u3010".concat(curSkinInfo.skinOwners, "\u3011\u4EBA\u62E5\u6709") : "尚未有人拥有";
+                        lblSkinCost.innerHTML = "【升币】x".concat(curSkinInfo.skinCost);
+                        var skinOwnersMsg = curSkinInfo.skinOwners > 0 ? "已有【".concat(curSkinInfo.skinOwners, "】人拥有") : "尚未有人拥有";
                         lblSkinOnwers.innerHTML = skinOwnersMsg;
                         lblSkinIsOwned.innerHTML = "尚未拥有";
                         btnBuyOrUseSelectedSkin.disabled = false;
@@ -1940,8 +1992,12 @@ var MainForm = /** @class */ (function () {
             if (isForum || curSkinInfo) {
                 if (isForum) {
                     var forumAvatarURL = daojuInfoByPlayer.forumAvatarURL;
-                    if (forumAvatarURL && forumAvatarURL.startsWith("URL:")) {
+                    if (forumAvatarURL && (forumAvatarURL.startsWith("URL:") || forumAvatarURL.includes("http"))) {
                         this.SetAvatarImage(true, this.gameScene, 0, 0, forumAvatarURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
+                    } else {
+                        // 如果没有自定义头像 URL，预览回退到默认皮肤
+                        var defaultSkinURL = "image/tractor/skin/skin_basicmale.webp";
+                        this.SetAvatarImage(true, this.gameScene, 0, 0, defaultSkinURL, this.gameScene.ui.gameMe, this.gameScene.coordinates.cardHeight);
                     }
                 } else {
                     var skinURL = "image/tractor/skin/".concat(curSkinInfo.skinName, ".").concat(curSkinInfo.skinType === 0 ? "webp" : "gif");
@@ -2042,7 +2098,7 @@ var MainForm = /** @class */ (function () {
         else if (result.ResultType == ShowingCardsValidationResult.ShowingCardsValidationResultType.Invalid) {
             //出牌失败
             var msgs = [
-                "\u51FA\u724C".concat(this.SelectedCards.length, "\u5F20\u5931\u8D25"),
+                "出牌".concat(this.SelectedCards.length, "张失败"),
             ];
             this.tractorPlayer.NotifyMessage(msgs);
             //暂时关闭托管功能，以免甩牌失败后立即点托管，会出别的牌
@@ -2062,8 +2118,8 @@ var MainForm = /** @class */ (function () {
         else {
             //甩牌失败
             var msgs = [
-                "\u7529\u724C".concat(this.SelectedCards.length, "\u5F20\u5931\u8D25"),
-                "\"\u7F5A\u5206\uFF1A".concat(this.SelectedCards.length * 10),
+                "甩牌".concat(this.SelectedCards.length, "张失败"),
+                "\"罚分：".concat(this.SelectedCards.length * 10),
             ];
             this.tractorPlayer.NotifyMessage(msgs);
             //暂时关闭托管功能，以免甩牌失败后立即点托管，会出别的牌
@@ -2144,7 +2200,7 @@ var MainForm = /** @class */ (function () {
         if (this.gameScene.ui.inputFormWrapper) {
             if (document.getElementById("btnBapi1")) {
                 var cutPoint = 0;
-                var cutInfo = "\u53D6\u6D88,".concat(cutPoint);
+                var cutInfo = "取消,".concat(cutPoint);
                 this.CutCardShoeCardsCompleteEventHandler(cutPoint, cutInfo);
                 return;
             }
@@ -2254,10 +2310,13 @@ var MainForm = /** @class */ (function () {
         this.gameScene.ui.divOnlinePlayerList = divOnlinePlayerList;
         var divChatHistory = this.gameScene.ui.create.div('.chatcomp.chatcompwithpadding.chattextdiv', frameChat);
         divChatHistory.style.top = 'calc(20%)';
-        divChatHistory.style.bottom = 'calc(90px)';
+        var chatUIToggleIndex = 0;
+        divChatHistory.style.transition = "".concat(CommonMethods.chatUIChangeDuration, "s");
+        divChatHistory.style.bottom = CommonMethods.divChatHistoryBottomChatToggleValues[chatUIToggleIndex];
         this.gameScene.ui.divChatHistory = divChatHistory;
         var selectChatPresetMsgs = document.createElement("select");
-        selectChatPresetMsgs.style.bottom = 'calc(50px)';
+        selectChatPresetMsgs.style.transition = "".concat(CommonMethods.chatUIChangeDuration, "s");
+        selectChatPresetMsgs.style.bottom = CommonMethods.selectChatPresetMsgsBottomChatToggleValues[chatUIToggleIndex];
         selectChatPresetMsgs.style.height = 'calc(30px)';
         selectChatPresetMsgs.style.width = 'calc(100% - 55px)';
         selectChatPresetMsgs.classList.add('chatcomp', 'chatcompwithoutpadding', 'chatinput');
@@ -2296,12 +2355,9 @@ var MainForm = /** @class */ (function () {
             selectChatPresetMsgs.appendChild(adminOpt3);
         }
 
-        selectChatPresetMsgs.addEventListener('change', function () {
-            _this.selectPresetMsgsIsOpen = true;
-            _this.handleSelectPresetMsgsClick(selectChatPresetMsgs);
-        });
-        var btnSendChat = this.gameScene.ui.create.div('.menubutton.highlight.pointerdiv', '发送', function () { return _this.sendPresetMsgs(selectChatPresetMsgs); });
-        btnSendChat.style.bottom = 'calc(50px)';
+        var btnSendChat = this.gameScene.ui.create.div('.menubutton.highlight.pointerdiv', '发送', function () { return _this.emojiSubmitEventhandler(); });
+        btnSendChat.style.transition = "".concat(CommonMethods.chatUIChangeDuration, "s");
+        btnSendChat.style.bottom = CommonMethods.btnSendChatBottomChatToggleValues[chatUIToggleIndex];
         btnSendChat.style.height = 'calc(18px)';
         btnSendChat.style.width = 'calc(40px)';
         btnSendChat.style.right = 'calc(0px)';
@@ -2310,6 +2366,16 @@ var MainForm = /** @class */ (function () {
         btnSendChat.classList.add('chatcomp', 'chatcompwithoutpadding', 'chatinput');
         frameChat.appendChild(btnSendChat);
         this.gameScene.ui.btnSendChat = btnSendChat;
+        var textAreaChatMsg = document.createElement("textarea");
+        textAreaChatMsg.style.display = CommonMethods.textAreaChatMsgDisplayChatToggleValues[chatUIToggleIndex];
+        textAreaChatMsg.maxLength = CommonMethods.chatMaxLength;
+        textAreaChatMsg.placeholder = "消息长度不超过".concat(CommonMethods.chatMaxLength, "，按“回车键”发送，消息为空时按“回车键”发送当前选中的快捷消息，快捷消息的快捷键为对应的数字/字母键");
+        textAreaChatMsg.style.resize = 'none';
+        textAreaChatMsg.style.height = '3em';
+        textAreaChatMsg.style.bottom = 'calc(50px)';
+        textAreaChatMsg.classList.add('chatcomp', 'chatcompwithpadding', 'chatinput');
+        frameChat.appendChild(textAreaChatMsg);
+        this.gameScene.ui.textAreaChatMsg = textAreaChatMsg;
     };
     MainForm.prototype.drawGameRoom = function () {
         var _this = this;
@@ -2366,7 +2432,7 @@ var MainForm = /** @class */ (function () {
             }
         }
         // room name
-        var roomNameString = "\u623F\u95F4\uFF1A".concat(this.tractorPlayer.CurrentRoomSetting.RoomName);
+        var roomNameString = "房间：".concat(this.tractorPlayer.CurrentRoomSetting.RoomName);
         var roomNameText = this.gameScene.ui.create.div('.roomNameText', roomNameString, this.gameScene.ui.frameGameRoom);
         roomNameText.style.fontFamily = 'serif';
         roomNameText.style.fontSize = '20px';
@@ -2376,7 +2442,7 @@ var MainForm = /** @class */ (function () {
         roomNameText.style.top = "calc(0px)";
         this.gameScene.ui.roomNameText = roomNameText;
         // room owner
-        var roomOwnerString = "\u623F\u4E3B\uFF1A".concat(this.gameScene.hidePlayerID ? "" : this.tractorPlayer.CurrentRoomSetting.RoomOwner);
+        var roomOwnerString = "房主：".concat(this.gameScene.hidePlayerID ? "" : this.tractorPlayer.CurrentRoomSetting.RoomOwner);
         var roomOwnerText = this.gameScene.ui.create.div('.roomOwnerText', roomOwnerString, this.gameScene.ui.frameGameRoom);
         roomOwnerText.style.fontFamily = 'serif';
         roomOwnerText.style.fontSize = '20px';
@@ -2491,7 +2557,7 @@ var MainForm = /** @class */ (function () {
         this.gameScene.ui.frameGameHallOnliners = frameGameHallOnliners;
         /*
         var pYuezhanHeader = document.createElement("p");
-        pYuezhanHeader.innerText = "\u7EA6\u6218(".concat(yuezhanList.length, ")");
+        pYuezhanHeader.innerText = "约战(".concat(yuezhanList.length, ")");
         pYuezhanHeader.style.marginTop = '0px';
         pYuezhanHeader.style.fontFamily = 'xinwei';
         pYuezhanHeader.style.fontSize = '30px';
@@ -2520,7 +2586,7 @@ var MainForm = /** @class */ (function () {
             pokerTable.style['background-size'] = '100% 100%';
             pokerTable.style['background-repeat'] = 'no-repeat';
             var noSignalStr = roomStateList[i].roomSetting.IsGameCasual == 0 ? "<br/>严肃活泼局" : "<br/>休闲娱乐局";
-            var pokerTableName = this_2.gameScene.ui.create.div('', "".concat(i + 1, "\u53F7\u623F\u95F4").concat(noSignalStr), this_2.gameScene.ui.frameGameHallTables);
+            var pokerTableName = this_2.gameScene.ui.create.div('', "".concat(i + 1, "号房间").concat(noSignalStr), this_2.gameScene.ui.frameGameHallTables);
             pokerTableName.style.fontFamily = 'serif';
             pokerTableName.style.fontSize = '18px';
             pokerTableName.style.width = '160px';
@@ -2653,7 +2719,7 @@ var MainForm = /** @class */ (function () {
                             }
                             var oid = roomStateList[i].CurrentGameState.Players[j].Observers[k];
                             playerListAll.push(oid);
-                            pokerPlayerOb = this_2.gameScene.ui.create.div('.pokerPlayerObGameHall', "\u3010".concat(oid, "\u3011"), this_2.gameScene.ui.frameGameHallTables);
+                            pokerPlayerOb = this_2.gameScene.ui.create.div('.pokerPlayerObGameHall', "【".concat(oid, "】"), this_2.gameScene.ui.frameGameHallTables);
                             pokerPlayerOb.style.fontFamily = 'serif';
                             pokerPlayerOb.style.fontSize = '20px';
                             pokerPlayerOb.style.left = leftOffsetChair;
@@ -2719,6 +2785,8 @@ var MainForm = /** @class */ (function () {
         for (var i = 0; i < roomStateList.length; i++) {
             _loop_2(i);
         }
+        // toggle chat UI
+        this.toggleChatUI();
         /*
         var IOwnYuezhan = false;
         for (var i = 0; i < yuezhanList.length; i++) {
@@ -2774,7 +2842,7 @@ var MainForm = /** @class */ (function () {
             divTitle.style.position = 'static';
             divTitle.style.display = 'block';
             divTitle.style.fontSize = '20px';
-            divTitle.innerText = "\u3010".concat(yuezhanInfo.owner, "\u3011\u7684\u7EA6\u6218");
+            divTitle.innerText = "【".concat(yuezhanInfo.owner, "】的约战");
             this_3.gameScene.ui.frameGameHallOnliners.appendChild(divTitle);
             var divDueDate = document.createElement("div");
             divDueDate.style.position = 'static';
@@ -2821,7 +2889,7 @@ var MainForm = /** @class */ (function () {
                 var d = document.createElement("div");
                 d.style.position = 'static';
                 d.style.display = 'block';
-                d.innerText = "\u3010".concat(parID, "\u3011");
+                d.innerText = "【".concat(parID, "】");
                 this_3.gameScene.ui.frameGameHallOnliners.appendChild(d);
             }
             var yze = new YuezhanEntity();
@@ -2959,10 +3027,8 @@ var MainForm = /** @class */ (function () {
                 if (emojiType !== prevSelection) {
                     _this.gameScene.ui.selectPresetMsgs.selectedIndex = emojiType;
                 }
-                var emojiIndex = CommonMethods.GetRandomInt(CommonMethods.winEmojiLength);
-                var msgString = CommonMethods.emojiMsgs[emojiType];
-                var args = [emojiType, emojiIndex, msgString];
-                _this.sendEmojiWithCheck(args);
+                _this.gameScene.ui.textAreaChatMsg.value = "";
+                _this.emojiSubmitEventhandler();
             }
             if (_this.gameScene.isInGameRoom()) {
                 switch (keyCode) {
@@ -3118,7 +3184,7 @@ var MainForm = /** @class */ (function () {
         // } else {
         var prefix = CommonMethods.systemMsgPrefix;
         if (playerID && !noSpeaker) {
-            prefix = "\u3010".concat(playerID, "\u3011\u8BF4\uFF1A");
+            prefix = "【".concat(playerID, "】说：");
         }
         finalMsg = "".concat(prefix).concat(msgString);
         // }
@@ -3133,6 +3199,11 @@ var MainForm = /** @class */ (function () {
     MainForm.prototype.appendChatMsg = function (finalMsg) {
         var p = document.createElement("p");
         p.innerText = finalMsg;
+        // 核心优化：高亮系统消息和全服广播
+        if (finalMsg.indexOf("【系统消息】") !== -1 || finalMsg.indexOf("【全服广播】") !== -1) {
+            p.style.color = "yellow";
+            p.style.fontWeight = "bold";
+        }
         this.gameScene.ui.divChatHistory.appendChild(p);
         this.gameScene.ui.divChatHistory.scrollTop = this.gameScene.ui.divChatHistory.scrollHeight;
     };
@@ -3181,7 +3252,7 @@ var MainForm = /** @class */ (function () {
                 var clientVersion = (pInfo && pInfo.clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb) ? "-怀旧版" : "";
                 var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion);
                 var pRank = pInfo ? pInfo.Rank : "初出江湖";
-                d.innerText = "\u3010".concat(pidInfo, "\u3011\u7B49\u7EA7\uFF1A").concat(pRank);
+                d.innerText = "【".concat(pidInfo, "】等级：").concat(pRank);
                 this.gameScene.ui.divOnlinePlayerList.appendChild(d);
             }
         }
@@ -3193,7 +3264,7 @@ var MainForm = /** @class */ (function () {
             var obs = playersInGameRoomObserving[key];
             obs.sort();
             var headerGameRoomPlaying = document.createElement("p");
-            headerGameRoomPlaying.innerText = "\u623F\u95F4\u3010".concat(key, "\u3011\u684C\u4E0A");
+            headerGameRoomPlaying.innerText = "房间【".concat(key, "】桌上");
             headerGameRoomPlaying.style.fontWeight = 'bold';
             this.gameScene.ui.divOnlinePlayerList.appendChild(headerGameRoomPlaying);
             for (var i = 0; i < players.length; i++) {
@@ -3207,12 +3278,12 @@ var MainForm = /** @class */ (function () {
                 var isOfflineInfo = (pid in playerIsOffline) ? "-离线中" : "";
                 var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion).concat(isOfflineInfo);
                 var pRank = pInfo ? pInfo.Rank : "初出茅庐";
-                d.innerText = "\u3010".concat(pidInfo, "\u3011\u7B49\u7EA7\uFF1A").concat(pRank);
+                d.innerText = "【".concat(pidInfo, "】等级：").concat(pRank);
                 this.gameScene.ui.divOnlinePlayerList.appendChild(d);
             }
             if (obs && obs.length > 0) {
                 var headerGameRoomObserving = document.createElement("p");
-                headerGameRoomObserving.innerText = "\u623F\u95F4\u3010".concat(key, "\u3011\u6811\u4E0A");
+                headerGameRoomObserving.innerText = "房间【".concat(key, "】树上");
                 headerGameRoomObserving.style.fontWeight = 'bold';
                 this.gameScene.ui.divOnlinePlayerList.appendChild(headerGameRoomObserving);
                 for (var i = 0; i < obs.length; i++) {
@@ -3225,7 +3296,7 @@ var MainForm = /** @class */ (function () {
                     var clientVersion = (pInfo && pInfo.clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb) ? "-怀旧版" : "";
                     var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion);
                     var pRank = pInfo ? pInfo.Rank : "初出茅庐";
-                    d.innerText = "\u3010".concat(pidInfo, "\u3011\u7B49\u7EA7\uFF1A").concat(pRank);
+                    d.innerText = "【".concat(pidInfo, "】等级：").concat(pRank);
                     this.gameScene.ui.divOnlinePlayerList.appendChild(d);
                 }
             }
@@ -3234,7 +3305,7 @@ var MainForm = /** @class */ (function () {
     };
     MainForm.prototype.NotifyOnlinePlayerListEventHandler = function (playerID, isJoining) {
         var isJoingingStr = isJoining ? "加入" : "退出";
-        var chatMsg = "\u3010".concat(playerID, "\u3011").concat(isJoingingStr, "\u4E86\u6E38\u620F");
+        var chatMsg = "【".concat(playerID, "】").concat(isJoingingStr, "了游戏");
         this.appendChatMsg(chatMsg);
         if (isJoining && this.shouldSoundEnter(playerID, true))
             this.gameScene.playAudio(CommonMethods.audioEnterHall);
@@ -3243,7 +3314,7 @@ var MainForm = /** @class */ (function () {
         if (!roomName)
             return;
         var isJoingingStr = isJoining ? "加入" : "退出";
-        var chatMsg = "\u3010".concat(playerID, "\u3011").concat(isJoingingStr, "\u4E86\u623F\u95F4\u3010").concat(roomName, "\u3011");
+        var chatMsg = "【".concat(playerID, "】").concat(isJoingingStr, "了房间【").concat(roomName, "】");
         this.appendChatMsg(chatMsg);
         if (isJoining && this.shouldSoundEnter(playerID, false))
             this.gameScene.playAudio(CommonMethods.audioEnterRoom, CommonMethods.GetPlayerCount(this.tractorPlayer.CurrentGameState.Players));
@@ -3268,7 +3339,7 @@ var MainForm = /** @class */ (function () {
         var cutPoint = -1;
         if (this.IsDebug || this.gameScene.ui.inputFormWrapper || this.gameScene.noCutCards.toLowerCase() === "true") {
             cutPoint = 0;
-            cutInfo = "\u53D6\u6D88,".concat(cutPoint);
+            cutInfo = "取消,".concat(cutPoint);
             this.CutCardShoeCardsCompleteEventHandler(cutPoint, cutInfo);
             return;
         }
@@ -3291,7 +3362,7 @@ var MainForm = /** @class */ (function () {
         // fix bug: 其它操作导致切牌对话框被终止，则视为取消切牌
         if (!btnRandom) {
             var cutPoint_1 = 0;
-            var cutInfo_1 = "\u53D6\u6D88,".concat(cutPoint_1);
+            var cutInfo_1 = "取消,".concat(cutPoint_1);
             this.CutCardShoeCardsCompleteEventHandler(cutPoint_1, cutInfo_1);
             return;
         }
@@ -3679,9 +3750,9 @@ var MainForm = /** @class */ (function () {
     };
     MainForm.prototype.DrawDumpFailureMessage = function (trick) {
         this.tractorPlayer.NotifyMessage([
-            "\u73A9\u5BB6\u3010".concat(trick.Learder, "\u3011"),
-            "\u7529\u724C".concat(CommonMethods.GetShowedCardsByPlayerID(trick.ShowedCards, trick.Learder).length, "\u5F20\u5931\u8D25"),
-            "\u7F5A\u5206\uFF1A".concat(CommonMethods.GetShowedCardsByPlayerID(trick.ShowedCards, trick.Learder).length * 10),
+            "玩家【".concat(trick.Learder, "】"),
+            "甩牌".concat(CommonMethods.GetShowedCardsByPlayerID(trick.ShowedCards, trick.Learder).length, "张失败"),
+            "罚分：".concat(CommonMethods.GetShowedCardsByPlayerID(trick.ShowedCards, trick.Learder).length * 10),
             "",
             "",
             "",

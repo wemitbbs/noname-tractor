@@ -2,11 +2,38 @@
 <meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="viewport" content="user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<link rel="manifest" href="./manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="favicon.ico">
 
 <head>
-    <title>Tractor</title>
+    <title>WeMitBBS 双升</title>
     <script>
+        // 核心优化：全自动启动守护进程 (Bootstrap Watchdog)
+        // 如果 10 秒内游戏引擎未能成功接管初始化流程，则强制原地刷新修复
+        window.bootstrapWatchdog = setTimeout(function() {
+            if (!window.noname_inited) {
+                console.error("启动超时：正在尝试自动修复并重新加载...");
+                localStorage.removeItem('noname_inited');
+                location.reload();
+            }
+        }, 10000);
+
+        // PWA Service Worker 注册
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('SW registered:', reg);
+                }).catch(err => {
+                    console.log('SW registration failed:', err);
+                });
+            });
+        }
+
         // 核心优化：如果从 phpBB 跳转回来且带有 sid，静默清理 URL
         (function() {
             if (window.history.replaceState && window.location.search.indexOf('sid=') !== -1) {
@@ -20,6 +47,29 @@
     <style>
         * {
             touch-action: manipulation;
+        }
+        
+        /* 核心：针对移动端全屏模式的 UI 缩放优化 */
+        @media screen and (max-width: 932px) and (orientation: landscape) {
+            /* 针对 iPhone Pro Max 等主流横屏设备 */
+            html {
+                /* 利用 zoom 实现非破坏性整体缩放（Safari/Chrome 支持良好） */
+                zoom: 0.6;
+            }
+            
+            /* 如果是 PWA 模式启动（Standalone 或 Fullscreen），可以进一步微调 */
+            @media (display-mode: standalone), (display-mode: fullscreen) {
+                html {
+                    zoom: 0.65;
+                }
+            }
+        }
+        
+        /* 针对较小屏幕的额外缩放 */
+        @media screen and (max-width: 667px) and (orientation: landscape) {
+            html {
+                zoom: 0.55;
+            }
         }
     </style>
     <script type="text/javascript" src="scripts/jquery-latest.js"></script>
@@ -59,7 +109,8 @@
     <!-- <script src="game/tractor_player.js"></script>
 <script src="game/main_form.js"></script>
 <script src="game/game_scene.js"></script> -->
-    <script src="game/game.js"></script>
+    <!-- 使用压缩版核心脚本提升加载速度 -->
+    <script src="game/game.min.js"></script>
 
     <!-- <script type="module" src="game/moduletest.js"></script> -->
 
