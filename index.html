@@ -12,22 +12,28 @@
 
 <head>
     <title>WeMitBBS 双升</title>
+    <!-- 1. 最先加载版本号文件 -->
+    <script src="game/update.js"></script>
     <script>
+        // 核心修复：立即提取版本号。因为 game.js 加载后会 delete window.noname_update，
+        // 如果等到 window.load 事件再提取，该变量已经不存在了，导致 swVersion 变成 Date.now()。
+        window.swVersion = (window.noname_update && window.noname_update.update) ? window.noname_update.update : Date.now();
+
         // 核心优化：全自动启动守护进程 (Bootstrap Watchdog)
-        // 如果 10 秒内游戏引擎未能成功接管初始化流程，则强制原地刷新修复
         window.bootstrapWatchdog = setTimeout(function() {
             if (!window.noname_inited) {
                 console.error("启动超时：正在尝试自动修复并重新加载...");
                 localStorage.removeItem('noname_inited');
                 location.reload();
             }
-        }, 10000);
+        }, 5000);
 
-        // PWA Service Worker 注册
+        // PWA Service Worker 注册：联动 update.js 的版本号
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => {
-                    console.log('SW registered:', reg);
+                var swVersion = window.swVersion;
+                navigator.serviceWorker.register('./sw.js?v=' + swVersion).then(reg => {
+                    console.log('SW registered with version:', swVersion);
                 }).catch(err => {
                     console.log('SW registration failed:', err);
                 });

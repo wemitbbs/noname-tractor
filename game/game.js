@@ -6710,6 +6710,11 @@
 		},
 		init:{
 			init:function(){
+				window.noname_inited=true;
+				if(window.bootstrapWatchdog){
+					clearTimeout(window.bootstrapWatchdog);
+					delete window.bootstrapWatchdog;
+				}
 				if(typeof __dirname==='string'&&__dirname.length){
 					var dirsplit=__dirname.split('/');
 					for(var i=0;i<dirsplit.length;i++){
@@ -6720,7 +6725,7 @@
 					}
 					lib.configprefix+='_';
 				}
-				window.resetGameTimeout=setTimeout(lib.init.reset,parseInt(localStorage.getItem(lib.configprefix+'loadtime'))||15000);
+				window.resetGameTimeout=setTimeout(lib.init.reset,parseInt(localStorage.getItem(lib.configprefix+'loadtime'))||8000);
 				if(window.cordovaLoadTimeout){
 					clearTimeout(window.cordovaLoadTimeout);
 					delete window.cordovaLoadTimeout;
@@ -8191,7 +8196,7 @@
 				}
 			},
 			reset:function(){
-				if(window.inSplash) return;
+				if(window.inSplash && document.getElementById('splash')) return;
 				if(window.resetExtension){
 					// if(confirm('游戏似乎未正常载入，是否禁用扩展并重新打开？')){
 					// 	// window.resetExtension();
@@ -8903,8 +8908,9 @@
 				};
 				if(!lib.imported.mode||!lib.imported.mode[lib.config.mode]){
 					window.inSplash=true;
+					// 核心优化：在 Splash 模式下延长守护时间而非彻底关闭，防止初始化死锁
 					clearTimeout(window.resetGameTimeout);
-					delete window.resetGameTimeout;
+					window.resetGameTimeout=setTimeout(lib.init.reset,30000); 
 					var clickedNode=false;
 					var clickNode=function(){
 						if(clickedNode) return;
@@ -8932,7 +8938,7 @@
 							}
 							splash.delete(1000);
 							delete window.inSplash;
-							window.resetGameTimeout=setTimeout(lib.init.reset,15000);
+							window.resetGameTimeout=setTimeout(lib.init.reset,8000);
 
 							this.listenTransition(function(){
 								lib.init.js(lib.assetURL+'mode',lib.config.mode,proceed);

@@ -192,7 +192,7 @@ var TractorPlayer = /** @class */ (function () {
         // 重画头像这样新任房主可将玩家请出房间
         this.mainForm.NewPlayerJoined(!this.IsTryingReenter, true);
 
-        // 动态注入房主/管理员指令
+        // 动态注入房主指令
         var selectPresetMsgs = this.mainForm.gameScene.ui.selectPresetMsgs;
         if (selectPresetMsgs) {
             // 1. 彻底清理现有的所有特殊命令 (★开头)
@@ -212,24 +212,6 @@ var TractorPlayer = /** @class */ (function () {
                 botOption.value = "命令：一键填满bot";
                 botOption.text = "★ 命令：一键填满bot";
                 selectPresetMsgs.appendChild(botOption);
-            }
-
-            // 是管理员，始终显示刷新设置 (在大厅、在房间都有)
-            if (this.isAdmin) {
-                var adminOption = document.createElement("option");
-                adminOption.value = "命令：刷新游戏设置";
-                adminOption.text = "★ 管理员：刷新游戏设置";
-                selectPresetMsgs.appendChild(adminOption);
-
-                var adminOption2 = document.createElement("option");
-                adminOption2.value = "命令：重载AI智脑";
-                adminOption2.text = "★ 管理员：重载AI智脑";
-                selectPresetMsgs.appendChild(adminOption2);
-
-                var adminOption3 = document.createElement("option");
-                adminOption3.value = "命令：清空无主房间";
-                adminOption3.text = "★ 管理员：清空无主房间";
-                selectPresetMsgs.appendChild(adminOption3);
             }
         }
 
@@ -532,7 +514,7 @@ var TractorPlayer = /** @class */ (function () {
                 return;
             }
             // 核心修复：统一处理所有闲置踢人消息
-            else if (m.includes("闲置超时")) {
+            else if (m.includes("闲置超时") || m.includes("在别处登录")) {
                 this.mainForm.showOfflineScreen(m);
                 return;
             }
@@ -613,6 +595,8 @@ var TractorPlayer = /** @class */ (function () {
         this.mainForm.gameScene.skinInUse = daojuInfo.daojuInfoByPlayer[this.MyOwnId] ? daojuInfo.daojuInfoByPlayer[this.MyOwnId].skinInUse : CommonMethods.defaultSkinInUse;
         if (updateSkin)
             this.mainForm.UpdateSkinStatus();
+        // 核心优化：如果玩家正打开着设置面板，立即刷新面板内的价格显示
+        this.mainForm.UpdateSkinInfoUI(false);
     };
     return TractorPlayer;
 }());

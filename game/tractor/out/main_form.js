@@ -224,23 +224,30 @@ var MainForm = /** @class */ (function () {
         // this.roomNameText.setVisible(true)
         // this.roomOwnerText.setVisible(true)
         // this.btnExitRoom.setVisible(true)
-        this.gameScene.ui.btnShowLastTrick.show();
+        // 核心加固：增加 UI 元素存在性检查，防止在网络极其迅速或初始化中断时报错崩溃
+        if (this.gameScene.ui.btnShowLastTrick) {
+            this.gameScene.ui.btnShowLastTrick.show();
+        }
         if (this.tractorPlayer.isObserver) {
-            this.gameScene.ui.btnReady.hide();
-            this.gameScene.ui.btnReady.classList.remove('pointerdiv');
-            this.gameScene.ui.btnRobot.hide();
-            this.gameScene.ui.btnQiangliang.hide();
+            if (this.gameScene.ui.btnReady) {
+                this.gameScene.ui.btnReady.hide();
+                this.gameScene.ui.btnReady.classList.remove('pointerdiv');
+            }
+            if (this.gameScene.ui.btnRobot) this.gameScene.ui.btnRobot.hide();
+            if (this.gameScene.ui.btnQiangliang) this.gameScene.ui.btnQiangliang.hide();
             if (this.gameScene.ui.btnExitAndObserve) {
                 this.gameScene.ui.btnExitAndObserve.remove();
                 delete this.gameScene.ui.btnExitAndObserve;
             }
         }
         else {
-            this.gameScene.ui.btnReady.show();
-            this.gameScene.ui.btnReady.classList.add('pointerdiv');
-            this.gameScene.ui.btnRobot.show();
-            this.gameScene.ui.btnQiangliang.show();
-            if (!this.gameScene.ui.btnExitAndObserve) {
+            if (this.gameScene.ui.btnReady) {
+                this.gameScene.ui.btnReady.show();
+                this.gameScene.ui.btnReady.classList.add('pointerdiv');
+            }
+            if (this.gameScene.ui.btnRobot) this.gameScene.ui.btnRobot.show();
+            if (this.gameScene.ui.btnQiangliang) this.gameScene.ui.btnQiangliang.show();
+            if (!this.gameScene.ui.btnExitAndObserve && this.gameScene.ui.create && this.gameScene.ui.create.system) {
                 this.gameScene.ui.btnExitAndObserve = this.gameScene.ui.create.system('上树', function () { return _this.ExitAndObserve(); }, true, true);
             }
         }
@@ -1703,23 +1710,6 @@ var MainForm = /** @class */ (function () {
                         selectPresetMsgs.remove(i);
                     }
                 }
-                // 仅保留管理员命令（如果此人是管理员）
-                if (this.tractorPlayer.isAdmin) {
-                    var adminOpt = document.createElement("option");
-                    adminOpt.value = "命令：刷新游戏设置";
-                    adminOpt.text = "★ 管理员：刷新游戏设置";
-                    selectPresetMsgs.appendChild(adminOpt);
-
-                    var adminOpt2 = document.createElement("option");
-                    adminOpt2.value = "命令：重载AI智脑";
-                    adminOpt2.text = "★ 管理员：重载AI智脑";
-                    selectPresetMsgs.appendChild(adminOpt2);
-
-                    var adminOpt3 = document.createElement("option");
-                    adminOpt3.value = "命令：清空无主房间";
-                    adminOpt3.text = "★ 管理员：清空无主房间";
-                    selectPresetMsgs.appendChild(adminOpt3);
-                }
             }
             this.gameScene.sendMessageToServer(ExitRoom_REQUEST, this.tractorPlayer.MyOwnId, "");
             return;
@@ -2338,22 +2328,6 @@ var MainForm = /** @class */ (function () {
             opt.text = "★ 命令：一键填满bot";
             selectChatPresetMsgs.appendChild(opt);
         }
-        if (this.tractorPlayer.isAdmin) {
-            var adminOpt = document.createElement("option");
-            adminOpt.value = "命令：刷新游戏设置";
-            adminOpt.text = "★ 管理员：刷新游戏设置";
-            selectChatPresetMsgs.appendChild(adminOpt);
-
-            var adminOpt2 = document.createElement("option");
-            adminOpt2.value = "命令：重载AI智脑";
-            adminOpt2.text = "★ 管理员：重载AI智脑";
-            selectChatPresetMsgs.appendChild(adminOpt2);
-
-            var adminOpt3 = document.createElement("option");
-            adminOpt3.value = "命令：清空无主房间";
-            adminOpt3.text = "★ 管理员：清空无主房间";
-            selectChatPresetMsgs.appendChild(adminOpt3);
-        }
 
         var btnSendChat = this.gameScene.ui.create.div('.menubutton.highlight.pointerdiv', '发送', function () { return _this.emojiSubmitEventhandler(); });
         btnSendChat.style.transition = "".concat(CommonMethods.chatUIChangeDuration, "s");
@@ -2927,7 +2901,13 @@ var MainForm = /** @class */ (function () {
         }
     };
     MainForm.prototype.drawHandZone = function () {
-        this.gameScene.ui.create.me(); // creates ui.me, which is hand zone
+        // 核心修复：不再依赖被注释掉的 ui.create.me()，直接手动创建手牌区
+        var handZone = document.getElementById('me');
+        if (!handZone) {
+            handZone = this.gameScene.ui.create.div('#me', this.gameScene.ui.arena);
+            handZone.classList.add('animate', 'start');
+        }
+        this.gameScene.ui.me = handZone;
         this.gameScene.ui.handZone = this.gameScene.ui.me;
         this.gameScene.ui.handZone.innerHTML = '';
         this.gameScene.ui.handZone.style.position = "absolute";
@@ -3224,9 +3204,12 @@ var MainForm = /** @class */ (function () {
                     if (!playersInGameRoomObserving[roomName]) {
                         playersInGameRoomObserving[roomName] = [];
                     }
-                    playersInGameRoomPlaying[roomName].push(player.PlayerId);
-                    if (player.IsOffline) {
-                        playerIsOffline[player.PlayerId] = true;
+                    // 核心修复：只有 PlayerId 存在时才加入“桌上”名单，防止出现 【null-离线中】
+                    if (player.PlayerId) {
+                        playersInGameRoomPlaying[roomName].push(player.PlayerId);
+                        if (player.IsOffline) {
+                            playerIsOffline[player.PlayerId] = true;
+                        }
                     }
                     if (player.Observers && player.Observers.length > 0) {
                         playersInGameRoomObserving[roomName] = playersInGameRoomObserving[roomName].concat(player.Observers);
@@ -3236,12 +3219,13 @@ var MainForm = /** @class */ (function () {
         }
         this.gameScene.ui.divOnlinePlayerList.innerHTML = '';
         // players in game hall
+        var headerGameHall = document.createElement("p");
+        headerGameHall.innerText = "大厅";
+        headerGameHall.style.fontWeight = 'bold';
+        this.gameScene.ui.divOnlinePlayerList.appendChild(headerGameHall);
+        
         if (playersInGameHall && playersInGameHall.length > 0) {
             playersInGameHall.sort();
-            var headerGameHall = document.createElement("p");
-            headerGameHall.innerText = "大厅";
-            headerGameHall.style.fontWeight = 'bold';
-            this.gameScene.ui.divOnlinePlayerList.appendChild(headerGameHall);
             for (var i = 0; i < playersInGameHall.length; i++) {
                 var d = document.createElement("div");
                 d.style.position = 'static';
@@ -3263,24 +3247,29 @@ var MainForm = /** @class */ (function () {
             players.sort();
             var obs = playersInGameRoomObserving[key];
             obs.sort();
-            var headerGameRoomPlaying = document.createElement("p");
-            headerGameRoomPlaying.innerText = "房间【".concat(key, "】桌上");
-            headerGameRoomPlaying.style.fontWeight = 'bold';
-            this.gameScene.ui.divOnlinePlayerList.appendChild(headerGameRoomPlaying);
-            for (var i = 0; i < players.length; i++) {
-                var d = document.createElement("div");
-                d.style.position = 'static';
-                d.style.display = 'block';
-                var pid = players[i];
-                var noChat = this.isChatBanned(pid) ? "-禁言中" : "";
-                var pInfo = this.DaojuInfo && this.DaojuInfo.daojuInfoByPlayer && this.DaojuInfo.daojuInfoByPlayer[pid];
-                var clientVersion = (pInfo && pInfo.clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb) ? "-怀旧版" : "";
-                var isOfflineInfo = (pid in playerIsOffline) ? "-离线中" : "";
-                var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion).concat(isOfflineInfo);
-                var pRank = pInfo ? pInfo.Rank : "初出茅庐";
-                d.innerText = "【".concat(pidInfo, "】等级：").concat(pRank);
-                this.gameScene.ui.divOnlinePlayerList.appendChild(d);
+            
+            // 核心修复：只有当房间里确实有人坐着时，才画“桌上”这个页眉
+            if (players.length > 0) {
+                var headerGameRoomPlaying = document.createElement("p");
+                headerGameRoomPlaying.innerText = "房间【".concat(key, "】桌上");
+                headerGameRoomPlaying.style.fontWeight = 'bold';
+                this.gameScene.ui.divOnlinePlayerList.appendChild(headerGameRoomPlaying);
+                for (var i = 0; i < players.length; i++) {
+                    var d = document.createElement("div");
+                    d.style.position = 'static';
+                    d.style.display = 'block';
+                    var pid = players[i];
+                    var noChat = this.isChatBanned(pid) ? "-禁言中" : "";
+                    var pInfo = this.DaojuInfo && this.DaojuInfo.daojuInfoByPlayer && this.DaojuInfo.daojuInfoByPlayer[pid];
+                    var clientVersion = (pInfo && pInfo.clientType === CommonMethods.PLAYER_CLIENT_TYPE_shengjiweb) ? "-怀旧版" : "";
+                    var isOfflineInfo = (pid in playerIsOffline) ? "-离线中" : "";
+                    var pidInfo = "".concat(pid).concat(noChat).concat(clientVersion).concat(isOfflineInfo);
+                    var pRank = pInfo ? pInfo.Rank : "初出茅庐";
+                    d.innerText = "【".concat(pidInfo, "】等级：").concat(pRank);
+                    this.gameScene.ui.divOnlinePlayerList.appendChild(d);
+                }
             }
+            
             if (obs && obs.length > 0) {
                 var headerGameRoomObserving = document.createElement("p");
                 headerGameRoomObserving.innerText = "房间【".concat(key, "】树上");

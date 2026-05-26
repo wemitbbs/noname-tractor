@@ -109,18 +109,19 @@ var GameScene = /** @class */ (function () {
         this.playerEmail = playerEmail;
         this.soundPool = {};
         this.loadAudioFiles();
-        this.wakeUpServer();
+        this.connectServer();
     }
-    // 核心优化：针对共享主机，先通过 HTTP 唤醒 Passenger 进程再进行 WSS 连接
-    // silent 为 true 时仅作为心跳唤醒，不执行后续 connect
-    GameScene.prototype.wakeUpServer = function (silent) {
+    // 核心优化：针对共享主机，通过 HTTP 唤醒后再进行 WSS 连接
+    // wakeupOnly 为 true 时仅执行 HTTP 唤醒（用于心跳），为 false 时在唤醒后自动执行 WSS 连接
+    GameScene.prototype.connectServer = function (wakeupOnly) {
         var _this = this;
-        var httpUrl = "".concat(window.location.protocol, "//").concat(this.hostName);
+        // 核心增强：增加时间戳，确保唤醒请求不被浏览器缓存拦截
+        var httpUrl = "".concat(window.location.protocol, "//").concat(this.hostName, "?t=").concat(Date.now());
         // 使用 no-cors 模式，即便没有 CORS 也能触发服务器
         fetch(httpUrl, { mode: 'no-cors' }).then(function () {
-            if (!silent) _this.connect();
+            if (!wakeupOnly) _this.connect();
         }).catch(function () {
-            if (!silent) _this.connect();
+            if (!wakeupOnly) _this.connect();
         });
     };
     // non-replay mode, online
@@ -142,8 +143,9 @@ var GameScene = /** @class */ (function () {
                 // 核心修复：建立 HTTP 定时心跳，防止 Passenger 进入待机模式
                 if (_this.httpKeepAliveTimer) clearInterval(_this.httpKeepAliveTimer);
                 _this.httpKeepAliveTimer = setInterval(function () {
-                    _this.wakeUpServer(true);
-                }, 60000); // 每 1 分钟发一次 HTTP 请求保持活跃
+                    // 心跳阶段只需单纯发送 HTTP 请求，无需重复触发 connect()
+                    _this.connectServer(true);
+                }, 30000); // 每 30 秒发一次 HTTP 请求保持活跃
 
                 // 核心修复：连接成功后，清理重连状态和 UI
                 if (_this.reconnectTimer) {
@@ -323,12 +325,13 @@ var GameScene = /** @class */ (function () {
                 if (_this.initialRetryCount >= 6) {
                     clearInterval(_this.reconnectTimer);
                     _this.reconnectTimer = null;
-                    document.body.innerHTML = "<div>!!! \u5C1D\u8BD5\u8FDE\u63A5\u670D\u52A1\u5668\u51FA\u9519\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(_this.hostNameOriginal, "</div>");
+                    document.body.innerHTML = "<div>!!! 尝试连接服务器出错，请确认输入信息无误：".concat(_this.hostNameOriginal, "</div>");
                     return;
                 }
             }
             console.log("Attempting to reconnect...");
-            _this.connect();
+            // 核心增强：在重连时预先发送 HTTP 唤醒请求，并在请求完成后再进行 WS 连接，确保共享主机进程被激活
+            _this.connectServer();
         }, 3000);
     };
     // replay mode, offline
