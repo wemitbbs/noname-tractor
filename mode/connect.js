@@ -40,6 +40,8 @@ game.import('mode', function (lib, game, ui, get, ai, _status) {
 				textLogin.style.lineHeight = '30px';
 				textLogin.style.fontFamily = 'xinwei';
 				textLogin.style.fontSize = '30px';
+				textLogin.style.color = 'white';
+				textLogin.style.textShadow = '2px 2px 4px black';
 				textLogin.style.padding = '10px';
 				textLogin.style.left = 'calc(50% - 200px)';
 				textLogin.style.top = 'calc(50%)';

@@ -88,7 +88,7 @@ var GameScene = /** @class */ (function () {
         this.hostNameOriginal = this.hostName;
         this.playerName = playerName.trim();
         if (this.playerName && CommonMethods.IsNumber(this.playerName)) {
-            document.body.innerHTML = "<div>!!! \u6635\u79F0\u4E0D\u80FD\u4EE5\u6570\u5B57\u5F00\u5934\u7ED3\u5C3E\uFF1A".concat(this.playerName, "</div>");
+            document.body.innerHTML = "<div>!!! 昵称不能以数字开头结尾：".concat(this.playerName, "</div>");
             this.hostName = "";
             return;
         }
@@ -97,7 +97,7 @@ var GameScene = /** @class */ (function () {
             this.wsprotocal = window.location.protocol === "https:" ? "wss" : "ws";
         } else {
             if (!(/(^|\s)((https?:\/\/)?[\w-]+(\.[\w-]+)*\.?(:\d+)?(\/.*)?$)/gi.test(this.hostName)) && !this.processAuth()) {
-                document.body.innerHTML = "<div>!!! \u89E3\u6790\u670D\u52A1\u5668\u5730\u5740\u5931\u8D25\uFF0C\u8BF7\u786E\u8BA4\u8F93\u5165\u4FE1\u606F\u65E0\u8BEF\uFF1A".concat(this.hostNameOriginal, "</div>");
+                document.body.innerHTML = "<div>!!! 解析服务器地址失败，请确认输入信息无误：".concat(this.hostNameOriginal, "</div>");
                 this.hostName = "";
                 return;
             }
@@ -109,20 +109,34 @@ var GameScene = /** @class */ (function () {
         this.playerEmail = playerEmail;
         this.soundPool = {};
         this.loadAudioFiles();
-        this.connectServer();
+        // 核心优化：仅在初次进入场景时执行 Session 刷新，重连不刷
+        this.connectServer(true, true);
     }
     // 核心优化：针对共享主机，通过 HTTP 唤醒后再进行 WSS 连接
-    // wakeupOnly 为 true 时仅执行 HTTP 唤醒（用于心跳），为 false 时在唤醒后自动执行 WSS 连接
-    GameScene.prototype.connectServer = function (wakeupOnly) {
+    // refreshSession 为 true 时先敲一下 PHP 刷新 phpBB Session Cookie
+    // proceedToConnect 为 true 时在唤醒后自动执行 WSS 连接
+    GameScene.prototype.connectServer = function (refreshSession, proceedToConnect) {
         var _this = this;
-        // 核心增强：增加时间戳，确保唤醒请求不被浏览器缓存拦截
-        var httpUrl = "".concat(window.location.protocol, "//").concat(this.hostName, "?t=").concat(Date.now());
-        // 使用 no-cors 模式，即便没有 CORS 也能触发服务器
-        fetch(httpUrl, { mode: 'no-cors' }).then(function () {
-            if (!wakeupOnly) _this.connect();
-        }).catch(function () {
-            if (!wakeupOnly) _this.connect();
-        });
+        var timestamp = Date.now();
+        var httpUrl = "".concat(window.location.protocol, "//").concat(this.hostName, "?t=").concat(timestamp);
+
+        // 内部流程：唤醒 Node.js 并连接
+        var doNodeWakeupAndConnect = function () {
+            fetch(httpUrl, { mode: 'no-cors' }).then(function () {
+                if (proceedToConnect) _this.connect();
+            }).catch(function () {
+                if (proceedToConnect) _this.connect();
+            });
+        };
+
+        if (refreshSession) {
+            // 只有初次进入大厅才刷新 Session
+            var phpUrl = "refresh_session.php?t=" + timestamp;
+            fetch(phpUrl).then(doNodeWakeupAndConnect).catch(doNodeWakeupAndConnect);
+        } else {
+            // 重连或心跳：直接敲 Node.js
+            doNodeWakeupAndConnect();
+        }
     };
     // non-replay mode, online
     GameScene.prototype.connect = function () {
@@ -143,8 +157,8 @@ var GameScene = /** @class */ (function () {
                 // 核心修复：建立 HTTP 定时心跳，防止 Passenger 进入待机模式
                 if (_this.httpKeepAliveTimer) clearInterval(_this.httpKeepAliveTimer);
                 _this.httpKeepAliveTimer = setInterval(function () {
-                    // 心跳阶段只需单纯发送 HTTP 请求，无需重复触发 connect()
-                    _this.connectServer(true);
+                    // 心跳阶段只需单纯发送 HTTP 请求保活，无需刷新 Session，也无需重复触发 connect()
+                    _this.connectServer(false, false);
                 }, 30000); // 每 30 秒发一次 HTTP 请求保持活跃
 
                 // 核心修复：连接成功后，清理重连状态和 UI
@@ -322,17 +336,51 @@ var GameScene = /** @class */ (function () {
         this.reconnectTimer = setInterval(function () {
             if (!_this.hasConnectedOnce) {
                 _this.initialRetryCount++;
-                if (_this.initialRetryCount >= 6) {
+                if (_this.initialRetryCount >= 3) {
                     clearInterval(_this.reconnectTimer);
                     _this.reconnectTimer = null;
-                    document.body.innerHTML = "<div>!!! 尝试连接服务器出错，请确认输入信息无误：".concat(_this.hostNameOriginal, "</div>");
+                    
+                    // 核心修复：完全同步 MainForm.showOfflineScreen 的视觉风格
+                    var overlay = document.createElement("div");
+                    overlay.style.position = "fixed";
+                    overlay.style.top = "0";
+                    overlay.style.left = "0";
+                    overlay.style.width = "100%";
+                    overlay.style.height = "100%";
+                    overlay.style.background = "rgba(0,0,0,0.65)";
+                    overlay.style.zIndex = "200000";
+                    overlay.style.display = "flex";
+                    overlay.style.flexDirection = "column";
+                    overlay.style.justifyContent = "center";
+                    overlay.style.alignItems = "center";
+                    overlay.style.fontFamily = 'xinwei, "Microsoft YaHei"';
+
+                    var text = document.createElement("div");
+                    text.innerText = "!!! 尝试连接服务器出错，请确认网络连接及服务器地址无误：" + _this.hostNameOriginal;
+                    text.style.fontSize = "30px";
+                    text.style.color = 'white';
+                    text.style.textShadow = '2px 2px 4px black';
+                    text.style.textAlign = "center";
+                    text.style.marginBottom = "20px";
+                    overlay.appendChild(text);
+
+                    var btn = document.createElement("div");
+                    btn.className = "menubutton highlight large";
+                    btn.innerText = "重试";
+                    btn.style.marginTop = "200px";
+                    btn.style.cursor = "pointer";
+                    btn.onclick = function() { window.location.reload(); };
+                    overlay.appendChild(btn);
+
+                    if (_this.ui.emailtext) _this.ui.emailtext.style.display = 'none';
+                    document.body.appendChild(overlay);
                     return;
                 }
             }
             console.log("Attempting to reconnect...");
             // 核心增强：在重连时预先发送 HTTP 唤醒请求，并在请求完成后再进行 WS 连接，确保共享主机进程被激活
-            _this.connectServer();
-        }, 3000);
+            _this.connectServer(false, true);
+            }, 3000);
     };
     // replay mode, offline
     GameScene.prototype.doReplay = function () {
